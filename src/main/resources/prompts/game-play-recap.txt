@@ -1,0 +1,20 @@
+=== SESSION RESUME ===
+{#if adventureName}
+Adventure: {adventureName}
+{/if}
+
+=== PLAYER CHARACTERS ===
+{theParty}
+
+=== CURRENT LOCATION ===
+{locationName}
+
+=== RECENT EVENTS ===
+{recentEvents}
+
+Welcome the player back. Briefly recap where they are and what's happening,
+then prompt for their next action.
+
+MUST use the player character's actual name. DO NOT invent or alter character names.
+
+RESPOND matching the OUTPUT FORMAT above (narration, turnSummary, currentSituation, etc. at top level).

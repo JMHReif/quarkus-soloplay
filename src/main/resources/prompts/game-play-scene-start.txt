@@ -1,0 +1,27 @@
+=== PLAYER CHARACTERS ===
+{theParty}
+
+{#if adventureName}
+=== ADVENTURE MODE ===
+
+Adventure: {adventureName}
+
+Retrieve the adventure's opening scene from the lore documents.
+Use the adventure's designated starting location and hook.
+
+Set the opening scene using the adventure's introduction.
+Establish the atmosphere per the source material and present the adventure's initial hook.
+{#else}
+=== SANDBOX MODE ===
+No pre-written adventure is selected.
+
+Welcome the player and ask what kind of adventure they're in the mood for:
+- Genre/tone (heroic fantasy, mystery, horror, political intrigue, exploration)
+- Setting preference (city, wilderness, dungeon, nautical, planar)
+- Stakes level (local problem, regional threat, world-shaking)
+
+Based on their answer, you'll collaboratively build the opening scene.
+Keep it conversational - this is session zero for the story.
+{/if}
+
+RESPOND matching the OUTPUT FORMAT above (narration, turnSummary, currentSituation, etc. at top level).

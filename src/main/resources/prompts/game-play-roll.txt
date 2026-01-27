@@ -1,0 +1,22 @@
+=== ROLL RESULT ===
+{#if adventureName}
+Adventure: {adventureName}
+{/if}
+
+Player-controlled characters:
+{theParty}
+
+Current Location: {locationName}
+{#if event}
+
+Previously:
+
+{event.render()}
+{/if}
+
+The player rolled for: {rollResult.context}
+Result: {rollResult.total} ({rollResult.breakdown})
+Outcome: {#if rollResult.success}SUCCESS{#else}FAILURE{/if}
+
+Narrate the outcome of this {rollResult.type}. Describe what happens
+based on the success or failure, then present the next decision point.

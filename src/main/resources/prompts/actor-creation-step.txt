@@ -1,0 +1,15 @@
+{#if currentDraft}
+=== CURRENT VALUES ===
+
+- name: {#if currentDraft.name}{currentDraft.name}{/if}
+- actorClass: {#if currentDraft.actorClass}{currentDraft.actorClass}{/if}
+- level (default to adventure recommendation or 1): {#if currentDraft.level}{currentDraft.level}{/if}
+- summary (brief 5-10 word description): {#if currentDraft.summary}{currentDraft.summary}{/if}
+- description (can be brief initially, will evolve during play): {#if currentDraft.description}{currentDraft.description}{/if}
+- aliases: {#if currentDraft.aliases}{currentDraft.aliases}{/if}
+- tags: {#if currentDraft.tags}{currentDraft.tags}{/if}
+{/if}
+
+The player has sent the following message:
+
+{playerInput}

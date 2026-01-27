@@ -1,0 +1,19 @@
+=== PLAYER ACTION ===
+{#if adventureName}
+Adventure: {adventureName}
+{/if}
+
+Player-controlled characters:
+{theParty}
+
+Current Location: {locationName}
+{#if event}
+
+Previously:
+
+{event.render()}
+{/if}
+
+Player says:
+
+{playerInput}
