@@ -2,23 +2,11 @@
 
 ## Database Indexes
 
-Indexes are automatically created when using Docker Compose for optimal query performance.
+Create indexes for optimal query performance after starting Neo4j.
 
-## Automatic Index Creation (Docker Compose)
+## Apply Indexes
 
-When you start Neo4j using `docker compose up`, indexes are **automatically applied** on first startup:
-
-```bash
-docker compose up -d
-```
-
-The `compose.yaml` mounts `src/main/resources/neo4j-indexes.cypher` to `/docker-entrypoint-initdb.d/init.cypher`, which Neo4j executes during initialization.
-
-**Important**: This only runs when creating a fresh database. If you already have data, see below.
-
-## Apply Indexes to Existing Database
-
-If you already have a running Neo4j database with data:
+After starting Neo4j with `docker compose up -d`, apply the indexes:
 
 ```bash
 # Apply indexes using docker compose
@@ -35,11 +23,12 @@ cat src/main/resources/neo4j-indexes.cypher | \
 
 ## Reset Database (Fresh Start)
 
-To start completely fresh and trigger automatic index creation:
+To start completely fresh:
 
 ```bash
 docker compose down -v  # WARNING: Deletes all data!
-docker compose up -d    # Recreates database with indexes auto-applied
+docker compose up -d    # Recreates empty database
+# Then re-apply indexes (see above)
 ```
 
 ## Index Benefits

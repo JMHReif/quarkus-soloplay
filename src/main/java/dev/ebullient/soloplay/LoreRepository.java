@@ -27,14 +27,23 @@ public class LoreRepository {
         var session = sessionFactory.openSession();
 
         try {
+            // Try exact match first, then with/without .md extension
             String cypher = """
                     MATCH (n:Document)
                     WHERE n.filename = $filename
+                       OR n.filename = $filenameWithMd
+                       OR n.filename = $filenameWithoutMd
                     RETURN n.text as text
                     ORDER BY n.sectionIndex, n.chunkIndex
                     """;
 
-            Iterable<Map<String, Object>> results = session.query(cypher, Map.of("filename", filename));
+            String filenameWithMd = filename.endsWith(".md") ? filename : filename + ".md";
+            String filenameWithoutMd = filename.endsWith(".md") ? filename.substring(0, filename.length() - 3) : filename;
+
+            Iterable<Map<String, Object>> results = session.query(cypher, Map.of(
+                    "filename", filename,
+                    "filenameWithMd", filenameWithMd,
+                    "filenameWithoutMd", filenameWithoutMd));
 
             StringBuilder content = new StringBuilder();
             for (Map<String, Object> row : results) {

@@ -55,7 +55,7 @@ CREATE INDEX actor_aliases IF NOT EXISTS
 FOR (a:Actor) ON (a.aliases);
 
 CREATE INDEX actor_name_normalized IF NOT EXISTS
-FOR (a:Actor) ON (a.nameNormalized);
+FOR (a:Actor) ON (a.normalizedName);
 
 CREATE INDEX location_game_id IF NOT EXISTS
 FOR (l:Location) ON (l.gameId);
@@ -67,7 +67,7 @@ CREATE INDEX location_aliases IF NOT EXISTS
 FOR (l:Location) ON (l.aliases);
 
 CREATE INDEX location_name_normalized IF NOT EXISTS
-FOR (l:Location) ON (l.nameNormalized);
+FOR (l:Location) ON (l.normalizedName);
 
 CREATE INDEX event_game_id IF NOT EXISTS
 FOR (e:Event) ON (e.gameId);
