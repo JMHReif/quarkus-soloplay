@@ -135,9 +135,10 @@ class PlayWebSocketTest {
 
     @Test
     void testUserMessageStreamsAssistantResponse() throws Exception {
-        Mockito.when(mockGameEngine.processRequest(Mockito.any(), Mockito.anyString(), Mockito.any(), Mockito.anyBoolean()))
+        Mockito.when(mockGameEngine.processRequest(Mockito.any(), Mockito.anyString(), Mockito.any(), Mockito.any(),
+                Mockito.anyBoolean()))
                 .thenAnswer(invocation -> {
-                    var emitter = (dev.ebullient.soloplay.play.GameEventEmitter) invocation.getArgument(2);
+                    var emitter = (dev.ebullient.soloplay.play.GameEventEmitter) invocation.getArgument(3);
                     emitter.assistantDelta("working...");
                     return GameResponse.reply("test");
                 });

@@ -16,12 +16,12 @@ public class GamePlayResponseGuardrail implements OutputGuardrail {
     /**
      * The default message to use when reprompting (JsonExtractorOutputGuardrail)
      */
-    public static final String REPROMPT_MESSAGE = "Invalid JSON";
+    public static final String REPROMPT_MESSAGE = "Your response had a JSON formatting error.";
 
     /**
      * The default prompt to append to the LLM during a reprompt (JsonExtractorOutputGuardrail)
      */
-    public static final String REPROMPT_PROMPT = "Make sure you return a valid JSON object following the specified format";
+    public static final String REPROMPT_PROMPT = "Please try again. Respond ONLY with a JSON object. Required fields: \"narration\" (story text), \"turnSummary\" (1-2 sentences), \"currentLocation\" (just the name), \"actorsPresent\" (array of name strings), \"locationsPresent\" (array of name strings). Do not acknowledge this correction.";
 
     @Inject
     ObjectMapper objectMapper;

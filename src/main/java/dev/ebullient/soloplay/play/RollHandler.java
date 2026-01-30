@@ -2,7 +2,6 @@ package dev.ebullient.soloplay.play;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -11,15 +10,16 @@ import java.util.stream.IntStream;
 
 import jakarta.enterprise.context.ApplicationScoped;
 
-import dev.ebullient.soloplay.play.GameEffect.HtmlFragment;
-import dev.ebullient.soloplay.play.model.GameState;
+import dev.ebullient.soloplay.play.GameEffect.StatefulEffect;
 import dev.ebullient.soloplay.play.model.PendingRoll;
+import dev.ebullient.soloplay.play.model.PendingRollStash;
 import dev.ebullient.soloplay.play.model.RollResult;
+import dev.ebullient.soloplay.play.model.Stash;
 import io.quarkus.logging.Log;
 
 @ApplicationScoped
 public class RollHandler {
-    static final String DRAFT_KEY = "pending_roll";
+    public static final String SLOT = "pending_roll";
 
     // Matches a single dice term: NdX (e.g., "2d6", "d20", "1d8")
     private static final Pattern DICE_TERM = Pattern.compile(
@@ -28,8 +28,15 @@ public class RollHandler {
     private static final Pattern MODIFIER_TERM = Pattern.compile(
             "([+-])(\\d+)");
 
-    public RollResult handleRollCommand(GameState game, String trimmed) {
-        PendingRoll pending = getPendingRoll(game);
+    /**
+     * Handle a roll command using client-provided pending roll state.
+     *
+     * @param clientStash The stash round-tripped from the client (may contain PendingRollStash)
+     * @param trimmed The roll input (e.g., "/roll 1d20+5" or "15")
+     * @return The roll result, or null if no pending roll or invalid input
+     */
+    public RollResult handleRollCommand(Stash clientStash, String trimmed) {
+        PendingRoll pending = (clientStash instanceof PendingRollStash prs) ? prs.toPendingRoll() : null;
         if (pending == null) {
             return null;
         }
@@ -111,19 +118,29 @@ public class RollHandler {
                 pending.context());
     }
 
-    PendingRoll getPendingRoll(GameState game) {
-        return game.getStash(DRAFT_KEY, PendingRoll.class);
-    }
-
-    void clearPendingRoll(GameState game) {
-        game.removeStash(DRAFT_KEY);
-    }
-
-    Optional<HtmlFragment> setPendingRoll(GameState game, PendingRoll pendingRoll) {
+    /**
+     * Create a StatefulEffect for a pending roll (for round-trip through client).
+     * Returns null if pendingRoll is null.
+     */
+    public StatefulEffect createPendingRollEffect(PendingRoll pendingRoll) {
         if (pendingRoll == null) {
-            return Optional.empty();
+            return null;
         }
-        game.putStash(DRAFT_KEY, pendingRoll);
-        return Optional.of(new HtmlFragment(DRAFT_KEY, pendingRoll.render()));
+        PendingRollStash stash = PendingRollStash.from(pendingRoll);
+        return new StatefulEffect(SLOT, pendingRoll.render(), stash);
+    }
+
+    /**
+     * Create a StatefulEffect that clears the pending roll state.
+     */
+    public StatefulEffect clearPendingRollEffect() {
+        return StatefulEffect.clear(SLOT);
+    }
+
+    /**
+     * Check if the input looks like a roll command.
+     */
+    public boolean isRollInput(String input) {
+        return input.startsWith("/roll") || input.matches("\\d+");
     }
 }

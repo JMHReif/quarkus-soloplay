@@ -13,6 +13,7 @@ import dev.ebullient.soloplay.play.model.Event;
 import dev.ebullient.soloplay.play.model.GameState;
 import dev.ebullient.soloplay.play.model.GameState.GamePhase;
 import dev.ebullient.soloplay.play.model.PlayerActor;
+import dev.ebullient.soloplay.play.model.Stash;
 import io.quarkus.logging.Log;
 import io.quarkus.qute.CheckedTemplate;
 import io.quarkus.qute.TemplateInstance;
@@ -44,7 +45,8 @@ public class GameEngine {
         return gameRepository.findGameById(gameId);
     }
 
-    public GameResponse processRequest(GameState game, String playerInput, GameEventEmitter emitter, boolean resuming) {
+    public GameResponse processRequest(GameState game, String playerInput, Stash clientDraft,
+            GameEventEmitter emitter, boolean resuming) {
         Objects.requireNonNull(emitter, "emitter");
         gameContext.setGameState(game, gamePlayEngine.listTheParty(game));
 
@@ -76,7 +78,7 @@ public class GameEngine {
 
         final GameResponse response;
         if (createActors) {
-            response = actorCreationEngine.processRequest(game, playerInput, emitter);
+            response = actorCreationEngine.processRequest(game, playerInput, clientDraft, emitter);
             gameRepository.refreshTheParty(game.getGameId());
         } else if (game.getGamePhase() == GamePhase.SCENE_INITIALIZATION || resuming) {
             // Check for existing events to decide: recap or fresh start
@@ -92,7 +94,7 @@ public class GameEngine {
             }
             game.setGamePhase(game.getGamePhase().next());
         } else {
-            response = gamePlayEngine.processRequest(game, playerInput, emitter);
+            response = gamePlayEngine.processRequest(game, playerInput, clientDraft, emitter);
             game.incrementTurn();
         }
 

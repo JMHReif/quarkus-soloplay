@@ -3,6 +3,8 @@ package dev.ebullient.soloplay.play;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 
+import dev.ebullient.soloplay.play.model.Stash;
+
 /**
  * Messages sent from client to server over the Play WebSocket.
  *
@@ -34,7 +36,8 @@ public sealed interface PlayWsClientMessage {
      * User message to the server.
      *
      * @param text The player's message text
+     * @param stash Round-trip state from previous server response (may be null)
      */
-    record UserMessage(String text) implements PlayWsClientMessage {
+    record UserMessage(String text, Stash stash) implements PlayWsClientMessage {
     }
 }

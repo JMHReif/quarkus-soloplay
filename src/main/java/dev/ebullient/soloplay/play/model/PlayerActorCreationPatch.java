@@ -13,7 +13,5 @@ public record PlayerActorCreationPatch(
         @Description("Tags for additional information: race, background, alignment") List<String> tags,
         @Description("Alternate names this character uses") List<String> aliases,
         @Description("A short explanation of the change") String rationale,
-        @Description("list of lore document filenames used. If you did not use lore docs or tools, sources = []. Don't invent filenames.") List<String> sources)
-        implements
-            Stash {
+        @Description("list of lore document filenames used. If you did not use lore docs or tools, sources = []. Don't invent filenames.") List<String> sources) {
 }

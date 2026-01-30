@@ -26,8 +26,13 @@ class PlayInterface {
         this.streamingBuffers = new Map();
         this.historyLoaded = false;
 
-        // Latest drafts/state pushed from server
-        this.drafts = {};
+        // Round-trip state from server, keyed by slot (e.g., "actor_draft", "pending_roll")
+        this.stashBySlot = new Map();
+
+        // Draft panel elements
+        this.draftPanel = document.getElementById('draft-panel');
+        this.draftContent = document.getElementById('draft-content');
+        this.draftCloseBtn = document.getElementById('draft-close');
 
         this.setupEventListeners();
         this.setInputEnabled(false);
@@ -40,6 +45,26 @@ class PlayInterface {
         // Auto-resize textarea
         this.messageInput.addEventListener('input', () => this.autoResize());
 
+        // Click-to-send for server-rendered choice buttons
+        this.messagesContainer.addEventListener('click', (e) => {
+            const btn = e.target?.closest?.('button[data-choice]');
+            if (!btn) return;
+
+            const choice = btn.getAttribute('data-choice') || btn.textContent;
+            const trimmed = (choice || '').trim();
+            if (!trimmed) return;
+
+            // Disable all buttons in this choice block to avoid double-submits
+            const block = btn.closest('.player-choices');
+            if (block) {
+                block.querySelectorAll('button[data-choice]').forEach(b => b.disabled = true);
+            } else {
+                btn.disabled = true;
+            }
+
+            this.sendMessage(trimmed);
+        });
+
         // Handle Enter key (Shift+Enter for new line)
         this.messageInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -47,6 +72,11 @@ class PlayInterface {
                 this.sendMessage();
             }
         });
+
+        // Draft panel close button
+        if (this.draftCloseBtn) {
+            this.draftCloseBtn.addEventListener('click', () => this.hideDraftPanel());
+        }
     }
 
     // ===== WebSocket Connection =====
@@ -167,6 +197,10 @@ class PlayInterface {
 
             case 'html_fragment':
                 this.handleHtmlFragment(message.id, message.message);
+                break;
+
+            case 'stateful_update':
+                this.handleStatefulUpdate(message.slot, message.html, message.stash);
                 break;
 
             case 'error':
@@ -370,6 +404,124 @@ class PlayInterface {
         return msgDiv;
     }
 
+    handleStatefulUpdate(slot, html, stash) {
+        // Store or clear stash by slot for round-tripping with next message
+        if (stash) {
+            this.stashBySlot.set(slot, stash);
+            console.debug('Stash updated:', slot, stash['@type']);
+        } else {
+            this.stashBySlot.delete(slot);
+            console.debug('Stash cleared:', slot);
+        }
+
+        // Update UI based on slot type
+        if (slot === 'actor_draft') {
+            if (stash) {
+                this.renderDraftPanel(stash, html);
+                this.showDraftPanel();
+            } else {
+                this.hideDraftPanel();
+            }
+        } else if (slot === 'pending_roll') {
+            // Pending roll is displayed as an HTML fragment in the chat
+            if (html) {
+                this.handleHtmlFragment(slot, html);
+            }
+        }
+    }
+
+    /**
+     * Get the current stash to send back to the server.
+     * If there's only one stash, return it directly.
+     * If multiple, return the most recent one (for now).
+     */
+    getCurrentStash() {
+        if (this.stashBySlot.size === 0) return null;
+        if (this.stashBySlot.size === 1) {
+            return this.stashBySlot.values().next().value;
+        }
+        // Multiple stashes - prioritize pending_roll over actor_draft for gameplay
+        if (this.stashBySlot.has('pending_roll')) {
+            return this.stashBySlot.get('pending_roll');
+        }
+        return this.stashBySlot.values().next().value;
+    }
+
+    renderDraftPanel(draft, serverHtml) {
+        if (!this.draftContent) return;
+
+        // Use server-provided HTML/markdown if available
+        if (serverHtml) {
+            this.draftContent.innerHTML = serverHtml;
+            return;
+        }
+
+        // Fallback to client-side rendering
+        const type = draft['@type'];
+        let html = '';
+
+        if (type === 'actor_draft') {
+            html = this.renderActorDraft(draft);
+        } else {
+            // Generic fallback for unknown draft types
+            html = `<pre>${JSON.stringify(draft, null, 2)}</pre>`;
+        }
+
+        this.draftContent.innerHTML = html;
+    }
+
+    renderActorDraft(draft) {
+        const fields = [];
+
+        if (draft.name) {
+            fields.push(`<div class="draft-field"><span class="draft-label">Name:</span> <span class="draft-value">${this.escapeHtml(draft.name)}</span></div>`);
+        }
+        if (draft.actorClass) {
+            fields.push(`<div class="draft-field"><span class="draft-label">Class:</span> <span class="draft-value">${this.escapeHtml(draft.actorClass)}</span></div>`);
+        }
+        if (draft.level) {
+            fields.push(`<div class="draft-field"><span class="draft-label">Level:</span> <span class="draft-value">${draft.level}</span></div>`);
+        }
+        if (draft.summary) {
+            fields.push(`<div class="draft-field"><span class="draft-label">Summary:</span> <span class="draft-value">${this.escapeHtml(draft.summary)}</span></div>`);
+        }
+        if (draft.description) {
+            fields.push(`<div class="draft-field draft-description"><span class="draft-label">Description:</span><div class="draft-value">${this.escapeHtml(draft.description)}</div></div>`);
+        }
+        if (draft.tags && draft.tags.length > 0) {
+            const tagHtml = draft.tags.map(t => `<span class="draft-tag">${this.escapeHtml(t)}</span>`).join(' ');
+            fields.push(`<div class="draft-field"><span class="draft-label">Tags:</span> <span class="draft-value">${tagHtml}</span></div>`);
+        }
+
+        if (fields.length === 0) {
+            return '<p class="draft-empty">No character details yet. Start describing your character!</p>';
+        }
+
+        return `<div class="draft-actor">${fields.join('')}</div>`;
+    }
+
+    showDraftPanel() {
+        if (this.draftPanel) {
+            this.draftPanel.classList.remove('hidden');
+        }
+    }
+
+    hideDraftPanel() {
+        if (this.draftPanel) {
+            this.draftPanel.classList.add('hidden');
+        }
+        if (this.draftContent) {
+            this.draftContent.innerHTML = '';
+        }
+    }
+
+    escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
     handleError(messageId, errorMessage) {
         console.error('Server error:', messageId, errorMessage);
 
@@ -418,9 +570,11 @@ class PlayInterface {
         this.autoResize();
 
         // Send to server (will broadcast to all connections including us)
+        // Include current stash for round-trip state management
         this.ws.send(JSON.stringify({
             type: 'user_message',
-            text: message
+            text: message,
+            stash: this.getCurrentStash()
         }));
     }
 

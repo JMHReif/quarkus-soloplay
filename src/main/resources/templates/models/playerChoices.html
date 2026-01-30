@@ -1,0 +1,15 @@
+<div class="player-choices" data-component="player-choices">
+  <div class="choices-header">
+    <strong>Choices</strong>
+  </div>
+  <ol class="choices-list">
+    {#for choice in choices.choices}
+    <li>
+      <button type="button" class="choice-btn" data-choice="{choice}">
+        {choice}
+      </button>
+    </li>
+    {/for}
+  </ol>
+</div>
+

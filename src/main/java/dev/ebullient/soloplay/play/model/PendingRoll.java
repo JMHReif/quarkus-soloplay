@@ -10,7 +10,7 @@ public record PendingRoll(
         @Description("\"strength\", \"dexterity\", etc.") String ability,
         @Description("Difficulty class. Null if contested or attack roll") Integer dc,
         @Description("who/what this is for or against") String target,
-        @Description("brief explanation of the roll for the player") String context) implements Stash {
+        @Description("brief explanation of the roll for the player") String context) {
 
     @CheckedTemplate(basePath = "models")
     public static class Templates {

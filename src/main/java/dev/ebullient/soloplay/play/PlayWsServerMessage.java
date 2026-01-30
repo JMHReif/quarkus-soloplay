@@ -7,6 +7,8 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 
+import dev.ebullient.soloplay.play.model.Stash;
+
 /**
  * Messages sent from server to client over the Play WebSocket.
  *
@@ -17,7 +19,7 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
  * - {@link AssistantStart}: Indicates assistant response is starting (includes message ID)
  * - {@link AssistantDelta}: Streaming chunk(s) from assistant response
  * - {@link AssistantDone}: Assistant response complete with final markdown/HTML
- * - {@link DraftUpdate}: Draft/state update for client-side UI
+ * - {@link StatefulUpdate}: Stateful effect for client to store and send back (round-trip state)
  * - {@link Error}: Error occurred during processing
  */
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
@@ -29,6 +31,7 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
         @JsonSubTypes.Type(value = PlayWsServerMessage.AssistantStart.class, name = "assistant_start"),
         @JsonSubTypes.Type(value = PlayWsServerMessage.AssistantDelta.class, name = "assistant_delta"),
         @JsonSubTypes.Type(value = PlayWsServerMessage.AssistantDone.class, name = "assistant_done"),
+        @JsonSubTypes.Type(value = PlayWsServerMessage.StatefulUpdate.class, name = "stateful_update"),
         @JsonSubTypes.Type(value = PlayWsServerMessage.Error.class, name = "error")
 })
 @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -132,5 +135,16 @@ public sealed interface PlayWsServerMessage {
      * @param message Human-readable error description
      */
     record AssistantExtraHtml(String id, String message) implements PlayWsServerMessage {
+    }
+
+    /**
+     * Stateful effect for client to store and send back with next message.
+     * Used for round-trip state (drafts, pending rolls, etc.) to keep server stateless.
+     *
+     * @param slot UI slot identifier (e.g., "actor_draft", "pending_roll")
+     * @param html Optional HTML/markdown for display (null if state should be hidden)
+     * @param stash The state object to store and round-trip (null clears the slot)
+     */
+    record StatefulUpdate(String slot, String html, Stash stash) implements PlayWsServerMessage {
     }
 }

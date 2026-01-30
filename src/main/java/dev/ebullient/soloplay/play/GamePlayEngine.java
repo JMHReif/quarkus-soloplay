@@ -11,16 +11,18 @@ import jakarta.inject.Inject;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import dev.ebullient.soloplay.GameRepository;
-import dev.ebullient.soloplay.play.GameEffect.HtmlFragment;
+import dev.ebullient.soloplay.play.GameEffect.StatefulEffect;
 import dev.ebullient.soloplay.play.model.Actor;
 import dev.ebullient.soloplay.play.model.BaseEntity;
 import dev.ebullient.soloplay.play.model.Event;
 import dev.ebullient.soloplay.play.model.GameState;
 import dev.ebullient.soloplay.play.model.Location;
 import dev.ebullient.soloplay.play.model.Patch;
-import dev.ebullient.soloplay.play.model.PendingRoll;
+import dev.ebullient.soloplay.play.model.PendingRollStash;
 import dev.ebullient.soloplay.play.model.PlayerActor;
+import dev.ebullient.soloplay.play.model.PlayerChoices;
 import dev.ebullient.soloplay.play.model.RollResult;
+import dev.ebullient.soloplay.play.model.Stash;
 
 @ApplicationScoped
 public class GamePlayEngine {
@@ -62,16 +64,25 @@ public class GamePlayEngine {
         return processResponse(game, response, emitter);
     }
 
-    public GameResponse processRequest(GameState game, String playerInput, GameEventEmitter emitter) {
+    /**
+     * Process a player request using client-provided stash for stateless operation.
+     *
+     * @param game The game state
+     * @param playerInput The player's input
+     * @param clientStash The stash round-tripped from the client (may be PendingRoll, etc.)
+     * @param emitter Event emitter for streaming responses
+     * @return The game response with effects (including any new StatefulEffect for round-trip)
+     */
+    public GameResponse processRequest(GameState game, String playerInput, Stash clientStash,
+            GameEventEmitter emitter) {
         Objects.requireNonNull(game, "game");
         Objects.requireNonNull(emitter, "emitter");
 
         String trimmed = playerInput == null ? "" : playerInput.trim();
 
-        // Check for pending roll resolution
-        PendingRoll pendingRoll = rollHandler.getPendingRoll(game);
-        if (pendingRoll != null && isRollInput(trimmed)) {
-            return resolveRoll(game, pendingRoll, trimmed, emitter);
+        // Check for pending roll resolution (from client-provided stash)
+        if (clientStash instanceof PendingRollStash pendingRollStash && rollHandler.isRollInput(trimmed)) {
+            return resolveRoll(game, pendingRollStash, trimmed, emitter);
         }
 
         // Standard turn
@@ -93,16 +104,17 @@ public class GamePlayEngine {
         return processResponse(game, response, emitter);
     }
 
-    private GameResponse resolveRoll(GameState game, PendingRoll pending, String rollInput,
+    private GameResponse resolveRoll(GameState game, PendingRollStash pendingStash, String rollInput,
             GameEventEmitter emitter) {
         emitter.assistantDelta("Processing roll…\n");
 
-        RollResult rollResult = rollHandler.handleRollCommand(game, rollInput);
+        RollResult rollResult = rollHandler.handleRollCommand(pendingStash, rollInput);
         if (rollResult == null) {
             return GameResponse.error("Could not parse roll input: " + rollInput);
         }
 
-        rollHandler.clearPendingRoll(game);
+        // Roll is resolved - clear the pending roll by sending a clear effect
+        var clearEffect = rollHandler.clearPendingRollEffect();
 
         var response = assistant.resolveRoll(
                 game.getGameId(),
@@ -112,10 +124,15 @@ public class GamePlayEngine {
                 game.getStash(EVENT_STASH, Event.class),
                 rollResult);
 
-        return processResponse(game, response, emitter);
+        return processResponse(game, response, emitter, clearEffect);
     }
 
     private GameResponse processResponse(GameState game, GamePlayResponse response, GameEventEmitter emitter) {
+        return processResponse(game, response, emitter, null);
+    }
+
+    private GameResponse processResponse(GameState game, GamePlayResponse response, GameEventEmitter emitter,
+            StatefulEffect additionalEffect) {
         if (response == null || response.narration() == null) {
             return GameResponse.error("No response from GM");
         }
@@ -126,23 +143,24 @@ public class GamePlayEngine {
         emitter.assistantDelta("Updating world state…\n");
         patchesAndEvents(game, response);
 
-        // Store pending roll if present
-        emitter.assistantDelta("Checking for pending roll…\n");
-        var htmlFragment = storePendingRoll(game, response.pendingRoll());
+        // Create pending roll effect if present (for round-trip through client)
+        var pendingRollEffect = rollHandler.createPendingRollEffect(response.pendingRoll());
 
-        return htmlFragment == null
-                ? GameResponse.reply(response.narration())
-                : GameResponse.reply(response.narration(), new GameEffect[] { htmlFragment });
-    }
+        // Build response with effects
+        var reply = GameResponse.reply(response.narration());
 
-    private HtmlFragment storePendingRoll(GameState game, PendingRoll roll) {
-        return rollHandler.setPendingRoll(game, roll)
-                .orElse(null);
-    }
+        if (pendingRollEffect != null) {
+            reply = reply.withEffects(pendingRollEffect);
+        }
+        if (response.playerChoices() != null && !response.playerChoices().isEmpty()) {
+            String html = new PlayerChoices(response.playerChoices()).render();
+            reply = reply.withEffects(new GameEffect.HtmlFragment("player_choices", html));
+        }
+        if (additionalEffect != null) {
+            reply = reply.withEffects(additionalEffect);
+        }
 
-    private boolean isRollInput(String input) {
-        // e.g., "/roll", "1d20+5", "15", etc.
-        return input.startsWith("/roll") || input.matches("\\d+");
+        return reply;
     }
 
     private void patchesAndEvents(GameState game, GamePlayResponse response) {

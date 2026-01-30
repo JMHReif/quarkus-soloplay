@@ -1,10 +1,10 @@
 package dev.ebullient.soloplay;
 
+import java.util.List;
+
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Alternative;
-
-import java.util.List;
 
 import dev.ebullient.soloplay.ai.JsonChatResponse;
 import dev.ebullient.soloplay.ai.LoreAssistant;
