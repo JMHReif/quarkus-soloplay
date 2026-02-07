@@ -1,0 +1,113 @@
+---
+name: {resource.name.quotedEscaped}
+filename: {resource.vaultPath}
+{#if resource.isNpc }
+label: NPC
+{#else}
+label: Monster
+{/if}
+{#if resource.sourceAndPage }
+loreSources:
+{#each resource.sourceAndPage}
+- {it.longName.quotedEscaped}
+{/each}
+{/if}{#if resource.aliases.size > 1 }
+aliases:
+{#each resource.aliases.skipFirst}
+- {it}
+{/each}{/if}
+loreTags:
+{#if resource.isNpc }
+- lore/npc
+{/if}
+{#if resource.vaultPath.contains("legendary-group") }
+- lore/legendary-group
+{#else}
+- lore/statblock
+- lore/monster/alignment/{resource.alignment}
+{/if}
+{#each resource.tags}{#if !it.contains("compendium") }
+- {it}
+{/if}{/each}
+{#if resource.hasImages }
+images:
+{#each resource.fluffImages}
+- {it.vaultPath}
+{/each}{/if}
+{#if resource.token}
+token: {resource.token.vaultPath}
+{/if}
+---
+# {resource.name}
+*{resource.size} {resource.fullType}, {resource.alignment}*
+
+- **Armor Class** {#if resource.ac }{resource.ac} {/if}{#if resource.acText }({resource.acText}){/if}
+- **Hit Points** {resource.hp} {#if resource.hitDice }({resource.hitDice}){/if} {#if resource.hpText }({resource.hpText}){/if}
+- **Speed** {resource.speed}
+
+STR: {resource.scores.str} | DEX: {resource.scores.dex} | CON: {resource.scores.con}
+INT: {resource.scores.int} | WIS: {resource.scores.wis} | CHA: {resource.scores.cha}
+
+- **Proficiency Bonus** {resource.pb}
+- **Saving Throws** {#if resource.savingThrows }{resource.savingThrows}{#else}⏤{/if}
+- **Skills** {#if resource.skills }{resource.skills}{#else}⏤{/if}
+- **Senses** {#if resource.senses }{resource.senses}, {/if}passive Perception {resource.passive}
+{#if resource.vulnerable }
+- **Damage Vulnerabilities** {resource.vulnerable}
+{/if}{#if resource.resist}
+- **Damage Resistances** {resource.resist}
+{/if}{#if resource.immune}
+- **Damage Immunities** {resource.immune}
+{/if}{#if resource.conditionImmune}
+- **Condition Immunities** {resource.conditionImmune}
+{/if}
+- **Languages** {#if resource.languages }{resource.languages}{#else}—{/if}
+- **Challenge** {resource.cr}
+{#if resource.trait}
+
+## Traits
+{#for trait in resource.trait}
+
+{#if trait.name }***{trait.name}.*** {/if}{trait.desc}
+{/for}{/if}{#if resource.action}
+
+## Actions
+{#for action in resource.action}
+
+{#if action.name }***{action.name}.*** {/if}{action.desc}
+{/for}{/if}{#if resource.bonusAction}
+
+## Bonus Actions
+{#for bonusAction in resource.bonusAction}
+
+{#if bonusAction.name }***{bonusAction.name}.*** {/if}{bonusAction.desc}
+{/for}{/if}{#if resource.reaction}
+
+## Reactions
+{#for reaction in resource.reaction}
+
+{#if reaction.name }***{reaction.name}.*** {/if}{reaction.desc}
+{/for}{/if}{#if resource.legendary}
+
+## Legendary Actions
+{#for legendary in resource.legendary}
+
+{#if legendary.name }***{legendary.name}.*** {/if}{legendary.desc}
+{/for}{/if}{#if resource.legendaryGroup}{#for group in resource.legendaryGroup}
+
+## {group.name}
+
+{group.desc}
+{/for}{/if}{#if resource.description }
+
+## Description
+
+{resource.description}
+{/if}{#if resource.environment }
+
+## Environment
+
+{resource.environment}
+{/if}
+
+============

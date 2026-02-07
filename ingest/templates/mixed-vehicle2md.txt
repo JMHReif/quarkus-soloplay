@@ -1,0 +1,105 @@
+---
+name: {resource.name.quotedEscaped}
+filename: {resource.vaultPath}
+label: Vehicle
+{#if resource.sourceAndPage }
+loreSources:
+{#each resource.sourceAndPage}
+- {it.longName.quotedEscaped}
+{/each}
+{/if}{#if resource.aliases.size > 1 }
+aliases:
+{#each resource.aliases.skipFirst}
+- {it}
+{/each}{/if}
+loreTags:
+- lore/statblock
+{#each resource.tags}{#if !it.contains("compendium") }
+- {it}
+{/if}{/each}{#if resource.hasImages }
+images:
+{#each resource.fluffImages}
+- {it.vaultPath}
+{/each}{/if}
+{#if resource.token}
+token: {resource.token.vaultPath}
+{/if}
+---
+# {resource.name}
+%%-- Embedded content starts on the next line. --%%
+{#if resource.text && !resource.isObject }{! ----- Fluff for non-OBJECT vehicles ----- !}
+
+{resource.text}
+
+{/if}
+## {resource.name} Statblock
+*{resource.sizeDimension}; {resource.terrain}*
+{#if resource.shipCrewCargoPace}
+
+{resource.shipCrewCargoPace}
+{/if}{#if resource.isObject }{! ----- BEGIN OBJECT (type) ----- !}
+{#if resource.scores}
+
+STR: {resource.scores.str} | DEX: {resource.scores.dex} | CON: {resource.scores.con}
+INT: {resource.scores.int} | WIS: {resource.scores.wis} | CHA: {resource.scores.cha}
+
+{/if}{#if resource.immuneResist }
+{resource.immuneResist}
+{/if}{#if resource.text }
+
+{resource.text}
+
+{/if}{#if resource.shipSections}{#each resource.shipSections}
+
+{it}
+{/each}{/if}
+{#else if resource.isCreature }{! ----- BEGIN CREATURE (type) ----- !}
+{#if resource.scores}
+
+STR: {resource.scores.str} | DEX: {resource.scores.dex} | CON: {resource.scores.con}
+INT: {resource.scores.int} | WIS: {resource.scores.wis} | CHA: {resource.scores.cha}
+
+{/if}{#if resource.immuneResist }
+{resource.immuneResist}
+{/if}{#if resource.shipSections}{#each resource.shipSections}
+
+{it}
+{/each}{/if}
+{#else if resource.isWarMachine }{! ----- BEGIN INFERNAL WAR MACHINE (type) ----- !}
+{#if resource.scores}
+
+STR: {resource.scores.str} | DEX: {resource.scores.dex} | CON: {resource.scores.con}
+INT: {resource.scores.int} | WIS: {resource.scores.wis} | CHA: {resource.scores.cha}
+
+{/if}{#if resource.immuneResist }
+{resource.immuneResist}
+{/if}{#if resource.shipSections}{#each resource.shipSections}
+
+{it}
+{/each}{/if}
+{#else if resource.isSpelljammer }{! ----- BEGIN SPELLJAMMER (type) ----- !}
+{#if resource.shipSections}{#each resource.shipSections}
+
+{it}
+{/each}{/if}
+{#else if resource.isShip }{! ----- BEGIN SHIP (type) ----- !}
+{#if resource.scores}
+
+STR: {resource.scores.str} | DEX: {resource.scores.dex} | CON: {resource.scores.con}
+INT: {resource.scores.int} | WIS: {resource.scores.wis} | CHA: {resource.scores.cha}
+
+{/if}{#if resource.immuneResist }
+{resource.immuneResist}
+{/if}{#if resource.action}
+
+## {resource.name} Actions
+{#each resource.action}
+
+{it}
+{/each}{/if}{#if resource.shipSections}{#each resource.shipSections}
+
+{it}
+{/each}{/if}
+{/if}{! END SHIP (type) !}
+
+============

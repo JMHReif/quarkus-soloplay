@@ -1,0 +1,12 @@
+---
+name: {name.quotedEscaped}
+filename: {vaultPath}
+label: index
+---
+# Index of {name}
+
+{#for mapping in resources}
+- [{mapping.title}]({mapping.relativePath})
+{/for}
+
+============
