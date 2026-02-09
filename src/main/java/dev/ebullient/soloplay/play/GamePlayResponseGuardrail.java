@@ -38,6 +38,14 @@ public class GamePlayResponseGuardrail implements OutputGuardrail {
                 // The LLM violated the constraint - force correction
                 return reprompt("Offer only a roll or a choice of actions", REPROMPT_PROMPT);
             }
+            if (response.patches() != null) {
+                for (var patch : response.patches()) {
+                    if (patch.type() == null || patch.name() == null) {
+                        return reprompt("Each patch must have a \"type\" (\"actor\" or \"location\") and a \"name\"",
+                                REPROMPT_PROMPT);
+                    }
+                }
+            }
 
             return OutputGuardrailResult.successWith(responseFromLLM.text(), response);
         } catch (JsonProcessingException e) {
