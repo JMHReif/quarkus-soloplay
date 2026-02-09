@@ -40,9 +40,9 @@ public class MarkdownDocumentParser {
     static final java.util.regex.Pattern MULTIPLE_BLANK_LINES = java.util.regex.Pattern
             .compile("\\n{3,}");
 
-    public Document parse(String filename, String content) {
+    public Document parse(String sourceFile, String content) {
         Map<String, Object> frontmatter = parseFrontmatter(content);
-        frontmatter.put("sourceFile", filename);
+        frontmatter.put("sourceFile", sourceFile);
         frontmatter.put("canonical", "true");
 
         String body = removeFrontmatter(content);
@@ -53,10 +53,13 @@ public class MarkdownDocumentParser {
         if (frontmatter.containsKey("chapterName")) {
             prefix += "Chapter %s: %s\n\n".formatted(frontmatter.get("chapterNumber"), frontmatter.get("chapterName"));
         }
-        frontmatter.put("groupPrefix", prefix);
+        if (!prefix.isEmpty()) {
+            frontmatter.put("group", prefix);
+        }
 
-        String label = deriveLabelFromFilename(filename);
-        frontmatter.put("label", label);
+        // label added as part of content generation
+        // String label = deriveLabelFromFilename(filename);
+        // frontmatter.put("label", label);
 
         Metadata metadata = Metadata.from(frontmatter);
 
@@ -68,6 +71,11 @@ public class MarkdownDocumentParser {
 
         // Clean up body
         body = cleanBody(body);
+
+        Log.debugf("Document metadata [%s]: %s",
+                metadata.getString("filename"),
+                metadata.toMap());
+
         return Document.from(body, metadata);
     }
 
@@ -146,8 +154,6 @@ public class MarkdownDocumentParser {
             return;
         }
 
-        boolean contentTypeSet = false;
-
         for (Object tag : loreTags) {
             String tagStr = tag.toString();
 
@@ -166,12 +172,6 @@ public class MarkdownDocumentParser {
                 continue;
             }
 
-            // Set contentType from first lore/ tag encountered
-            if (!contentTypeSet) {
-                metadata.put("contentType", parts[0]);
-                contentTypeSet = true;
-            }
-
             final String key;
             final String value;
             // Parse nested properties
@@ -188,8 +188,6 @@ public class MarkdownDocumentParser {
                 key = keyBuilder.toString();
                 value = parts[parts.length - 1].replaceAll("\\s+", " ").trim();
             } else {
-                // Simple case: "lore/statblock" → contentType already set, no other value to
-                // save
                 continue;
             }
 
@@ -216,61 +214,5 @@ public class MarkdownDocumentParser {
         // Collapse multiple blank lines to single
         body = MULTIPLE_BLANK_LINES.matcher(body).replaceAll("\n\n");
         return body.trim();
-    }
-
-    /**
-     * Derive a PascalCase singular label from a filename.
-     * Example: "items.txt" → "Item", "magic-items.txt" → "MagicItem"
-     */
-    private String deriveLabelFromFilename(String filename) {
-        if (filename == null || filename.isBlank()) {
-            return null;
-        }
-
-        // Remove extension
-        String baseName = filename.contains(".")
-                ? filename.substring(0, filename.lastIndexOf('.'))
-                : filename;
-
-        if (baseName.isBlank()) {
-            return null;
-        }
-
-        // Singularization rules for common English plural forms
-        if (baseName.endsWith("ies")) {
-            // abilities → ability
-            baseName = baseName.substring(0, baseName.length() - 3) + "y";
-        } else if (baseName.endsWith("sses")) {
-            // classes → class
-            baseName = baseName.substring(0, baseName.length() - 2);
-        } else if (baseName.endsWith("xes")) {
-            // boxes → box
-            baseName = baseName.substring(0, baseName.length() - 2);
-        } else if (baseName.endsWith("ches")) {
-            // watches → watch
-            baseName = baseName.substring(0, baseName.length() - 2);
-        } else if (baseName.endsWith("shes")) {
-            // dishes → dish
-            baseName = baseName.substring(0, baseName.length() - 2);
-        } else if (baseName.endsWith("s") && !baseName.endsWith("ss")) {
-            // items → item, adventures → adventure, monsters → monster
-            baseName = baseName.substring(0, baseName.length() - 1);
-        }
-
-        // Convert to PascalCase, handling hyphens and underscores
-        // "magic-item" → "MagicItem", "magic_item" → "MagicItem"
-        StringBuilder result = new StringBuilder();
-        boolean capitalizeNext = true;
-        for (char c : baseName.toCharArray()) {
-            if (c == '-' || c == '_') {
-                capitalizeNext = true;
-            } else if (capitalizeNext) {
-                result.append(Character.toUpperCase(c));
-                capitalizeNext = false;
-            } else {
-                result.append(Character.toLowerCase(c));
-            }
-        }
-        return result.toString();
     }
 }

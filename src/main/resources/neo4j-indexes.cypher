@@ -7,6 +7,23 @@
 CREATE INDEX document_source_file IF NOT EXISTS
 FOR (d:Document) ON (d.sourceFile);
 
+// Vector index used by LangChain4j (Neo4jEmbeddingStore) + LoreRetriever.
+// Name must match quarkus.langchain4j.neo4j.index-name (default: vector).
+// Dimensions must match quarkus.langchain4j.neo4j.dimension.
+CREATE VECTOR INDEX vector IF NOT EXISTS
+FOR (d:Document) ON (d.embedding)
+OPTIONS {
+  indexConfig: {
+    `vector.dimensions`: 768,
+    `vector.similarity_function`: 'cosine'
+  }
+};
+
+// Used by IngestService for chunk relationship creation (MATCH ... WHERE d.id = $fromId/$toId).
+// Note: LangChain4j/Neo4jEmbeddingStore assigns IDs for stored segments; this enforces and indexes them.
+CREATE CONSTRAINT document_id_unique IF NOT EXISTS
+FOR (d:Document) REQUIRE d.id IS UNIQUE;
+
 CREATE INDEX document_filename IF NOT EXISTS
 FOR (d:Document) ON (d.filename);
 
@@ -16,6 +33,14 @@ FOR (d:Document) ON (d.adventureName);
 // Speeds up document reconstruction by filename in section/chunk order.
 CREATE INDEX document_filename_section_chunk IF NOT EXISTS
 FOR (d:Document) ON (d.filename, d.sectionIndex, d.chunkIndex);
+
+// ===== File Indexes/Constraints =====
+// Used by LoreRepository + IngestService for fast cross-reference lookup and deletes.
+CREATE CONSTRAINT file_filename_unique IF NOT EXISTS
+FOR (f:File) REQUIRE f.filename IS UNIQUE;
+
+CREATE INDEX file_source_file IF NOT EXISTS
+FOR (f:File) ON (f.sourceFile);
 
 // ===== ChatMemory Indexes =====
 

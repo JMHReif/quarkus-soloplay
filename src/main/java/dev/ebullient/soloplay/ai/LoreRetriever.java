@@ -44,41 +44,41 @@ public class LoreRetriever implements Supplier<RetrievalAugmentor> {
             """);
 
     /**
-     * Keyword patterns for detecting content type from queries.
-     * Maps pattern to contentType metadata value (from loreTags).
+     * Keyword patterns for detecting a document label from queries.
+     * Maps pattern to the "label" metadata value (from YAML frontmatter).
      */
-    private static final Map<Pattern, String> CONTENT_TYPE_PATTERNS = Map.of(
+    private static final Map<Pattern, String> LABEL_PATTERNS = Map.of(
             Pattern.compile("\\b(monster|creature|enemy|beast|fiend|undead|goblin|orc)s?\\b",
                     Pattern.CASE_INSENSITIVE),
-            "monster",
+            "Monster",
             Pattern.compile("\\b(item|weapon|armor|equipment|gear|sword|axe|shield|potion)s?\\b",
                     Pattern.CASE_INSENSITIVE),
-            "item",
+            "Item",
             Pattern.compile("\\b(spell|cantrip|ritual|incantation)s?\\b",
                     Pattern.CASE_INSENSITIVE),
-            "spell",
+            "Spell",
             Pattern.compile("\\b(vehicle|ship|boat|airship|wagon|cart)s?\\b",
                     Pattern.CASE_INSENSITIVE),
-            "vehicle",
+            "Vehicle",
             Pattern.compile(
                     "\\b(class|subclass|fighter|wizard|rogue|cleric|barbarian|paladin|ranger|monk|bard|druid|sorcerer|warlock)(?:es)?\\b",
                     Pattern.CASE_INSENSITIVE),
-            "class",
+            "Class",
             Pattern.compile("\\b(race|species|elf|dwarf|halfling|human|dragonborn|tiefling|gnome)s?\\b",
                     Pattern.CASE_INSENSITIVE),
-            "race",
+            "Race",
             Pattern.compile("\\b(background|acolyte|criminal|soldier|noble|sage|hermit|outlander)s?\\b",
                     Pattern.CASE_INSENSITIVE),
-            "background",
+            "Background",
             Pattern.compile("\\b(feat|feats)\\b",
                     Pattern.CASE_INSENSITIVE),
-            "feat");
+            "Feat");
 
     /**
-     * Detect contentType from query text using keyword patterns.
+     * Detect label from query text using keyword patterns.
      */
-    private static String detectContentType(String query) {
-        for (Map.Entry<Pattern, String> entry : CONTENT_TYPE_PATTERNS.entrySet()) {
+    private static String detectLabel(String query) {
+        for (Map.Entry<Pattern, String> entry : LABEL_PATTERNS.entrySet()) {
             if (entry.getKey().matcher(query).find()) {
                 return entry.getValue();
             }
@@ -91,35 +91,35 @@ public class LoreRetriever implements Supplier<RetrievalAugmentor> {
             EmbeddingModel model,
             @ConfigProperty(name = "campaign.setting.minScore", defaultValue = "0.3") Double minScore,
             @ConfigProperty(name = "campaign.setting.maxResults", defaultValue = "5") int maxResults,
-            @ConfigProperty(name = "quarkus.langchain4j.neo4j.index-name", defaultValue = "document-index") String indexName) {
+            @ConfigProperty(name = "quarkus.langchain4j.neo4j.index-name", defaultValue = "vector") String indexName) {
 
         // Create Cypher-based retriever with auto-detection and fallback
-        // Explicit filter can be specified by prefixing query with [filter:contentType]
+        // Explicit filter can be specified by prefixing query with [filter:label]
         ContentRetriever cypherRetriever = new ContentRetriever() {
             @Override
             public List<Content> retrieve(Query query) {
                 String queryText = query.text();
 
-                // Parse optional explicit filter prefix: [filter:contentType]
-                String contentType = null;
+                // Parse optional explicit filter prefix: [filter:label]
+                String label = null;
                 boolean explicitFilter = false;
                 if (queryText.startsWith("[filter:")) {
                     int endBracket = queryText.indexOf(']');
                     if (endBracket > 8) {
-                        contentType = queryText.substring(8, endBracket).trim();
+                        label = queryText.substring(8, endBracket).trim();
                         queryText = queryText.substring(endBracket + 1).trim();
                         explicitFilter = true;
                     }
                 }
 
-                // Auto-detect contentType from query keywords if not explicitly set
-                if (contentType == null) {
-                    contentType = detectContentType(queryText);
+                // Auto-detect label from query keywords if not explicitly set
+                if (label == null) {
+                    label = detectLabel(queryText);
                 }
 
                 Log.debugf("RAG Query: %s", queryText);
-                if (contentType != null) {
-                    Log.debugf("RAG Filter: contentType = %s (explicit=%s)", contentType, explicitFilter);
+                if (label != null) {
+                    Log.debugf("RAG Filter: label = %s (explicit=%s)", label, explicitFilter);
                 }
 
                 // Generate query embedding (without filter prefix)
@@ -127,10 +127,10 @@ public class LoreRetriever implements Supplier<RetrievalAugmentor> {
 
                 // Execute vector similarity search with optional filter
                 List<Content> results = executeVectorSearch(sessionFactory, indexName, queryEmbedding,
-                        contentType, maxResults, minScore);
+                        label, maxResults, minScore);
 
                 // Fallback to unfiltered search if auto-detected filter returns few results
-                if (!explicitFilter && contentType != null && results.size() < 2) {
+                if (!explicitFilter && label != null && results.size() < 2) {
                     Log.debugf("Auto-filtered search returned %d results, falling back to unfiltered", results.size());
                     results = executeVectorSearch(sessionFactory, indexName, queryEmbedding,
                             null, maxResults, minScore);
@@ -149,7 +149,7 @@ public class LoreRetriever implements Supplier<RetrievalAugmentor> {
         // Custom content injector that frames RAG content clearly
         var contentInjector = DefaultContentInjector.builder()
                 .promptTemplate(RAG_PROMPT_TEMPLATE)
-                .metadataKeysToInclude(List.of("name", "source", "filename", "contentType"))
+                .metadataKeysToInclude(List.of("name", "source", "filename", "label"))
                 .build();
 
         augmentor = DefaultRetrievalAugmentor
@@ -160,11 +160,11 @@ public class LoreRetriever implements Supplier<RetrievalAugmentor> {
     }
 
     /**
-     * Execute vector similarity search with optional contentType filtering.
+     * Execute vector similarity search with optional label filtering.
      * Fetches neighboring chunks (via NEXT relationships) to provide additional context.
      */
     private List<Content> executeVectorSearch(SessionFactory sessionFactory, String indexName,
-            float[] queryEmbedding, String contentType, int maxResults, double minScore) {
+            float[] queryEmbedding, String label, int maxResults, double minScore) {
         var session = sessionFactory.openSession();
         List<Content> results = new ArrayList<>();
 
@@ -172,17 +172,17 @@ public class LoreRetriever implements Supplier<RetrievalAugmentor> {
             String cypher;
             Map<String, Object> params;
 
-            if (contentType != null && !contentType.isBlank()) {
-                // Filter by contentType metadata property, include neighbors
+            if (label != null && !label.isBlank()) {
+                // Filter by label metadata property, include neighbors
                 // Use larger candidate pool (5x) to ensure enough matches after filtering
                 cypher = """
                         CALL db.index.vector.queryNodes($indexName, $maxResults * 5, $embedding)
                         YIELD node, score
-                        WHERE score >= $minScore AND node.contentType = $contentType
+                        WHERE score >= $minScore AND toLower(node.label) = toLower($label)
                         OPTIONAL MATCH (prev)-[:NEXT]->(node)
                         OPTIONAL MATCH (node)-[:NEXT]->(next)
                         RETURN node.text AS text, node.name AS name, node.filename AS filename,
-                               node.contentType AS contentType, node.sourceFile AS sourceFile, score,
+                               node.label AS label, node.sourceFile AS sourceFile, score,
                                prev.text AS prevText, next.text AS nextText
                         ORDER BY score DESC
                         LIMIT $maxResults
@@ -192,7 +192,7 @@ public class LoreRetriever implements Supplier<RetrievalAugmentor> {
                         "embedding", queryEmbedding,
                         "maxResults", maxResults,
                         "minScore", minScore,
-                        "contentType", contentType);
+                        "label", label);
             } else {
                 // No filtering, include neighbors
                 cypher = """
@@ -202,7 +202,7 @@ public class LoreRetriever implements Supplier<RetrievalAugmentor> {
                         OPTIONAL MATCH (prev)-[:NEXT]->(node)
                         OPTIONAL MATCH (node)-[:NEXT]->(next)
                         RETURN node.text AS text, node.name AS name, node.filename AS filename,
-                               node.contentType AS contentType, node.sourceFile AS sourceFile, score,
+                               node.label AS label, node.sourceFile AS sourceFile, score,
                                prev.text AS prevText, next.text AS nextText
                         ORDER BY score DESC
                         """;
@@ -240,8 +240,8 @@ public class LoreRetriever implements Supplier<RetrievalAugmentor> {
                     if (row.get("filename") != null) {
                         metadata.put("filename", row.get("filename").toString());
                     }
-                    if (row.get("contentType") != null) {
-                        metadata.put("contentType", row.get("contentType").toString());
+                    if (row.get("label") != null) {
+                        metadata.put("label", row.get("label").toString());
                     }
                     if (row.get("sourceFile") != null) {
                         metadata.put("source", row.get("sourceFile").toString());

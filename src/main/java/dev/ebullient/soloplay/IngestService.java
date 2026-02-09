@@ -1,5 +1,6 @@
 package dev.ebullient.soloplay;
 
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -8,6 +9,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.resteasy.reactive.multipart.FileUpload;
 import org.neo4j.ogm.session.SessionFactory;
 
 import dev.langchain4j.data.document.Document;
@@ -45,23 +47,27 @@ public class IngestService {
     SessionFactory sessionFactory;
 
     @Inject
+    LoreRepository loreRepository;
+
+    @Inject
     MarkdownDocumentParser markdownParser;
 
-    public void ingestFile(String filename, String content) {
-        Log.infof("Processing file: %s (size: %d bytes)", filename, content.length());
+    public void ingestFile(String sourceFile, String content) {
+        Log.infof("Processing file: %s (size: %d bytes)", sourceFile, content.length());
 
-        boolean isAdventureFile = "adventures.txt".equals(filename);
+        boolean isAdventureFile = "adventures.txt".equals(sourceFile);
         List<String> allChunkIds = isAdventureFile ? new ArrayList<>() : null;
 
         if (content.contains(TOOLS_DOC_SEPARATOR)) {
             String[] parts = content.split(TOOLS_DOC_SEPARATOR);
-            Log.infof("Found %d structured sections in %s", parts.length, filename);
+            Log.infof("Found %d structured sections in %s", parts.length, sourceFile);
             int processedCount = 0;
             for (String part : parts) {
                 String trimmed = part.trim();
                 // Skip empty parts and parts that are just the separator
                 if (!trimmed.isBlank() && !trimmed.equals("============")) {
-                    Document document = markdownParser.parse(filename, trimmed);
+                    Document document = markdownParser.parse(sourceFile, trimmed);
+                    loreRepository.createFileNode(document);
                     List<String> chunkIds = chunkDocument(document);
                     if (allChunkIds != null) {
                         allChunkIds.addAll(chunkIds);
@@ -69,9 +75,10 @@ public class IngestService {
                     processedCount++;
                 }
             }
-            Log.infof("Processed %d non-empty notes from %s", processedCount, filename);
+            Log.infof("Processed %d non-empty notes from %s", processedCount, sourceFile);
         } else {
-            Document document = markdownParser.parse(filename, content.trim());
+            Document document = markdownParser.parse(sourceFile, content.trim());
+            loreRepository.createFileNode(document);
             List<String> chunkIds = chunkDocument(document);
             if (allChunkIds != null) {
                 allChunkIds.addAll(chunkIds);
@@ -83,14 +90,17 @@ public class IngestService {
             createChunkRelationships(allChunkIds);
         }
 
-        Log.infof("Completed processing file: %s", filename);
+        Log.infof("Completed processing file: %s", sourceFile);
     }
 
     private List<String> chunkDocument(Document document) {
         Metadata common = document.metadata();
 
         String sourceFile = common.getString("sourceFile");
-        String prefix = common.getString("groupPrefix");
+        String prefix = common.getString("group");
+        if (prefix == null) {
+            prefix = "";
+        }
         String content = document.text();
 
         List<TextSegment> segments = new ArrayList<>();
@@ -167,9 +177,6 @@ public class IngestService {
         List<String> chunkIds = embeddingStore.addAll(embeddings, segments);
         Log.infof("Stored %d embeddings for %s", embeddings.size(), sourceFile);
 
-        // Add source-specific label to nodes (e.g., items.txt → :Item)
-        addLabelToNodes(chunkIds, common.getString("label"));
-
         // Create NEXT relationships for chunked sections (non-adventure files only)
         // Adventure files handle this separately with relationships across all chunks
         boolean isAdventureFile = "adventures.txt".equals(sourceFile);
@@ -191,29 +198,6 @@ public class IngestService {
     }
 
     /**
-     * Add an additional label to Document nodes.
-     */
-    private void addLabelToNodes(List<String> nodeIds, String label) {
-        if (nodeIds.isEmpty() || label == null) {
-            return;
-        }
-
-        var session = sessionFactory.openSession();
-        try (var tx = session.beginTransaction()) {
-            String cypher = """
-                    MATCH (d:Document) WHERE d.id IN $nodeIds
-                    SET d:%s
-                    """.formatted(label);
-            session.query(cypher, Map.of("nodeIds", nodeIds));
-
-            tx.commit();
-            Log.infof("Added label :%s to %d nodes", label, nodeIds.size());
-        } catch (Exception e) {
-            Log.errorf(e, "Error adding label to nodes: %s", e.getMessage());
-        }
-    }
-
-    /**
      * Create NEXT relationships between sequential chunks for adventure files.
      */
     private void createChunkRelationships(List<String> chunkIds) {
@@ -222,9 +206,7 @@ public class IngestService {
         }
 
         var session = sessionFactory.openSession();
-        var tx = session.beginTransaction();
-
-        try {
+        try (var tx = session.beginTransaction();) {
             for (int i = 0; i < chunkIds.size() - 1; i++) {
                 String createNext = """
                         MATCH (d1:Document) WHERE d1.id = $fromId
@@ -239,11 +221,8 @@ public class IngestService {
             tx.commit();
             Log.infof("Created %d NEXT relationships between chunks", chunkIds.size() - 1);
         } catch (Exception e) {
-            tx.rollback();
             Log.errorf(e, "Error creating chunk relationships: %s", e.getMessage());
             throw new RuntimeException("Failed to create chunk relationships: " + e.getMessage(), e);
-        } finally {
-            tx.close();
         }
     }
 
@@ -257,9 +236,7 @@ public class IngestService {
         }
 
         var session = sessionFactory.openSession();
-        var tx = session.beginTransaction();
-
-        try {
+        try (var tx = session.beginTransaction()) {
             int relationshipCount = 0;
             for (int[] range : sectionRanges) {
                 int startIdx = range[0];
@@ -281,11 +258,8 @@ public class IngestService {
             tx.commit();
             Log.infof("Created %d NEXT relationships within %d sections", relationshipCount, sectionRanges.size());
         } catch (Exception e) {
-            tx.rollback();
             Log.errorf(e, "Error creating section chunk relationships: %s", e.getMessage());
             throw new RuntimeException("Failed to create section chunk relationships: " + e.getMessage(), e);
-        } finally {
-            tx.close();
         }
     }
 
@@ -328,9 +302,24 @@ public class IngestService {
      */
     public int deleteFile(String sourceFile) {
         var session = sessionFactory.openSession();
-        var tx = session.beginTransaction();
+        try (var tx = session.beginTransaction()) {
+            String deleteFilesCypher = """
+                    MATCH (f:File)
+                    WHERE f.sourceFile = $sourceFile
+                    WITH count(f) as deleteCount
+                    MATCH (f:File)
+                    WHERE f.sourceFile = $sourceFile
+                    DETACH DELETE f
+                    RETURN deleteCount
+                    """;
 
-        try {
+            Iterable<Map<String, Object>> fileResults = session.query(deleteFilesCypher,
+                    Map.of("sourceFile", sourceFile));
+            int fileDeleteCount = 0;
+            for (Map<String, Object> row : fileResults) {
+                fileDeleteCount = ((Long) row.get("deleteCount")).intValue();
+            }
+
             String cypher = """
                     MATCH (n:Document)
                     WHERE n.sourceFile = $sourceFile
@@ -350,14 +339,12 @@ public class IngestService {
             }
 
             tx.commit();
+            Log.infof("Deleted %d file nodes for file: %s", fileDeleteCount, sourceFile);
             Log.infof("Deleted %d embeddings for file: %s", deleteCount, sourceFile);
             return deleteCount;
         } catch (Exception e) {
-            tx.rollback();
             Log.errorf(e, "Error deleting file: %s", e.getMessage());
             throw new RuntimeException("Failed to delete file: " + e.getMessage(), e);
-        } finally {
-            tx.close();
         }
     }
 
@@ -367,9 +354,21 @@ public class IngestService {
      */
     public int deleteAllDocuments() {
         var session = sessionFactory.openSession();
-        var tx = session.beginTransaction();
+        try (var tx = session.beginTransaction();) {
+            String deleteFilesCypher = """
+                    MATCH (f:File)
+                    WITH count(f) as deleteCount
+                    MATCH (f:File)
+                    DETACH DELETE f
+                    RETURN deleteCount
+                    """;
 
-        try {
+            Iterable<Map<String, Object>> fileResults = session.query(deleteFilesCypher, Map.of());
+            int fileDeleteCount = 0;
+            for (Map<String, Object> row : fileResults) {
+                fileDeleteCount = ((Long) row.get("deleteCount")).intValue();
+            }
+
             String cypher = """
                     MATCH (n:Document)
                     WITH count(n) as deleteCount
@@ -386,14 +385,12 @@ public class IngestService {
             }
 
             tx.commit();
+            Log.infof("Deleted %d file nodes", fileDeleteCount);
             Log.infof("Deleted %d document embeddings", deleteCount);
             return deleteCount;
         } catch (Exception e) {
-            tx.rollback();
             Log.errorf(e, "Error deleting documents: %s", e.getMessage());
             throw new RuntimeException("Failed to delete documents: " + e.getMessage(), e);
-        } finally {
-            tx.close();
         }
     }
 
@@ -429,13 +426,13 @@ public class IngestService {
      * @param files List of file uploads to process
      * @return IngestResult containing processed files and any errors
      */
-    public IngestResult ingestDocuments(List<org.jboss.resteasy.reactive.multipart.FileUpload> files) {
+    public IngestResult ingestDocuments(List<FileUpload> files) {
         List<String> processedFiles = new ArrayList<>();
         List<FileError> errors = new ArrayList<>();
 
         for (var file : files) {
             try {
-                String content = java.nio.file.Files.readString(file.uploadedFile());
+                String content = Files.readString(file.uploadedFile());
                 ingestFile(file.fileName(), content);
                 processedFiles.add(file.fileName());
             } catch (Exception e) {
