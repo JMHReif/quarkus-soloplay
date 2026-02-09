@@ -450,54 +450,79 @@ class PlayInterface {
     renderDraftPanel(draft, serverHtml) {
         if (!this.draftContent) return;
 
-        // Use server-provided HTML/markdown if available
-        if (serverHtml) {
-            this.draftContent.innerHTML = serverHtml;
+        const type = draft['@type'];
+
+        // Actor drafts always use client-side editable form (ignore serverHtml)
+        if (type === 'actor_draft') {
+            this.draftContent.innerHTML = this.renderActorDraft(draft);
+            this.bindDraftInputs();
             return;
         }
 
-        // Fallback to client-side rendering
-        const type = draft['@type'];
-        let html = '';
-
-        if (type === 'actor_draft') {
-            html = this.renderActorDraft(draft);
+        // Other types: use server HTML or generic fallback
+        if (serverHtml) {
+            this.draftContent.innerHTML = serverHtml;
         } else {
-            // Generic fallback for unknown draft types
-            html = `<pre>${JSON.stringify(draft, null, 2)}</pre>`;
+            this.draftContent.innerHTML = `<pre>${JSON.stringify(draft, null, 2)}</pre>`;
         }
-
-        this.draftContent.innerHTML = html;
     }
 
     renderActorDraft(draft) {
-        const fields = [];
+        const field = (label, key, value, type = 'text') => {
+            const escaped = this.escapeHtml(value ?? '');
+            if (type === 'textarea') {
+                return `<div class="draft-field draft-description">
+                    <label class="draft-label" for="draft-${key}">${label}</label>
+                    <textarea class="draft-input draft-textarea" id="draft-${key}" data-key="${key}" rows="3">${escaped}</textarea>
+                </div>`;
+            }
+            const attrs = type === 'number' ? 'type="number" min="1"' : 'type="text"';
+            return `<div class="draft-field">
+                <label class="draft-label" for="draft-${key}">${label}</label>
+                <input class="draft-input" id="draft-${key}" data-key="${key}" ${attrs} value="${escaped}">
+            </div>`;
+        };
 
-        if (draft.name) {
-            fields.push(`<div class="draft-field"><span class="draft-label">Name:</span> <span class="draft-value">${this.escapeHtml(draft.name)}</span></div>`);
-        }
-        if (draft.actorClass) {
-            fields.push(`<div class="draft-field"><span class="draft-label">Class:</span> <span class="draft-value">${this.escapeHtml(draft.actorClass)}</span></div>`);
-        }
-        if (draft.level) {
-            fields.push(`<div class="draft-field"><span class="draft-label">Level:</span> <span class="draft-value">${draft.level}</span></div>`);
-        }
-        if (draft.summary) {
-            fields.push(`<div class="draft-field"><span class="draft-label">Summary:</span> <span class="draft-value">${this.escapeHtml(draft.summary)}</span></div>`);
-        }
-        if (draft.description) {
-            fields.push(`<div class="draft-field draft-description"><span class="draft-label">Description:</span><div class="draft-value">${this.escapeHtml(draft.description)}</div></div>`);
-        }
-        if (draft.tags && draft.tags.length > 0) {
-            const tagHtml = draft.tags.map(t => `<span class="draft-tag">${this.escapeHtml(t)}</span>`).join(' ');
-            fields.push(`<div class="draft-field"><span class="draft-label">Tags:</span> <span class="draft-value">${tagHtml}</span></div>`);
-        }
+        const listField = (label, key, values) => {
+            const joined = (values ?? []).join(', ');
+            return `<div class="draft-field">
+                <label class="draft-label" for="draft-${key}">${label}</label>
+                <input class="draft-input" id="draft-${key}" data-key="${key}" data-list="true" type="text" value="${this.escapeHtml(joined)}" placeholder="comma-separated">
+            </div>`;
+        };
 
-        if (fields.length === 0) {
-            return '<p class="draft-empty">No character details yet. Start describing your character!</p>';
-        }
+        return `<div class="draft-actor">
+            ${field('Name', 'name', draft.name)}
+            ${field('Class', 'actorClass', draft.actorClass)}
+            ${field('Level', 'level', draft.level, 'number')}
+            ${field('Summary', 'summary', draft.summary)}
+            ${field('Description', 'description', draft.description, 'textarea')}
+            ${listField('Tags', 'tags', draft.tags)}
+            ${listField('Aliases', 'aliases', draft.aliases)}
+        </div>`;
+    }
 
-        return `<div class="draft-actor">${fields.join('')}</div>`;
+    bindDraftInputs() {
+        if (!this.draftContent) return;
+        const inputs = this.draftContent.querySelectorAll('.draft-input');
+        inputs.forEach(input => {
+            input.addEventListener('input', () => {
+                const stash = this.stashBySlot.get('actor_draft');
+                if (!stash) return;
+                const key = input.dataset.key;
+                if (input.dataset.list === 'true') {
+                    stash[key] = input.value
+                        .split(',')
+                        .map(s => s.trim())
+                        .filter(s => s.length > 0);
+                } else if (input.type === 'number') {
+                    stash[key] = input.value ? parseInt(input.value, 10) : null;
+                } else {
+                    stash[key] = input.value || null;
+                }
+                console.debug('Draft updated:', key, stash[key]);
+            });
+        });
     }
 
     showDraftPanel() {

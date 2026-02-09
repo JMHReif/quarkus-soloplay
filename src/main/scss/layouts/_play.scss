@@ -102,10 +102,22 @@
 }
 
 .draft-field {
+    display: flex;
+    align-items: baseline;
+    gap: var(--spacing-sm);
     margin-bottom: var(--spacing-sm);
 
     &:last-child {
         margin-bottom: 0;
+    }
+
+    // Description (textarea) wraps label above
+    &.draft-description {
+        flex-wrap: wrap;
+
+        .draft-label {
+            flex-basis: 100%;
+        }
     }
 }
 
@@ -113,28 +125,36 @@
     color: var(--color-text-secondary);
     font-size: 0.85rem;
     font-weight: 500;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
-.draft-value {
+.draft-input {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    border-bottom: 1px solid var(--color-text-accent);
     color: var(--color-text-primary);
-}
+    font-size: 0.9rem;
+    padding: 2px 0;
+    font-family: inherit;
+    outline: none;
 
-.draft-description {
-    .draft-value {
-        display: block;
-        margin-top: var(--spacing-xs);
-        font-size: 0.9rem;
-        line-height: 1.4;
+    &:focus {
+        border-bottom-color: var(--color-text-primary);
+    }
+
+    &::placeholder {
+        color: var(--color-text-secondary);
+        font-style: italic;
     }
 }
 
-.draft-tag {
-    display: inline-block;
-    background: var(--color-bg-base);
-    padding: 2px 8px;
-    border-radius: var(--radius-sm);
-    font-size: 0.8rem;
-    margin-right: var(--spacing-xs);
+.draft-textarea {
+    width: 100%;
+    resize: vertical;
+    min-height: 3em;
+    line-height: 1.4;
 }
 
 .draft-empty {
