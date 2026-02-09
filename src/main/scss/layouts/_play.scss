@@ -45,11 +45,7 @@
 
 // Draft panel - displays current draft state
 .draft-panel {
-    position: fixed;
-    bottom: 80px; // Above input container
-    right: var(--spacing-md);
-    width: 320px;
-    max-height: 400px;
+    max-height: 25vh;
     background: var(--color-bg-elevated);
     border: 1px solid var(--color-text-accent);
     border-radius: var(--radius-md);
@@ -62,6 +58,22 @@
     &.hidden {
         display: none;
     }
+}
+
+@media only screen and (min-width: 800px) {
+  main.chat-area:not(:has(.draft-panel.hidden)) {
+    #chat-messages {
+      padding-right: 330px;
+    }
+    .draft-panel {
+      position: absolute;
+      top: 5px;
+      right: var(--spacing-md);
+      width: 320px;
+      height: calc(50vh - 12.5px);
+      max-height: unset;
+    }
+  }
 }
 
 .draft-header {

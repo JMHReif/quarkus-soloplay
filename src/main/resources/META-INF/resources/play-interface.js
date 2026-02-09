@@ -416,7 +416,7 @@ class PlayInterface {
 
         // Update UI based on slot type
         if (slot === 'actor_draft') {
-            if (stash) {
+            if (stash && this.draftHasContent(stash)) {
                 this.renderDraftPanel(stash, html);
                 this.showDraftPanel();
             } else {
@@ -538,6 +538,13 @@ class PlayInterface {
         if (this.draftContent) {
             this.draftContent.innerHTML = '';
         }
+    }
+
+    draftHasContent(stash) {
+        return stash.name || stash.actorClass || stash.level
+            || stash.summary || stash.description
+            || (stash.tags && stash.tags.length > 0)
+            || (stash.aliases && stash.aliases.length > 0);
     }
 
     escapeHtml(text) {
