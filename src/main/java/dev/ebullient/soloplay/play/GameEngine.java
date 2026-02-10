@@ -167,8 +167,7 @@ public class GameEngine {
 
         StringBuilder sb = new StringBuilder();
         for (Event event : recent) {
-            sb.append("- Turn ").append(event.getTurnNumber()).append(": ")
-                    .append(event.getSummary()).append("\n");
+            sb.append(event.render());
         }
         return sb.toString().trim();
     }
