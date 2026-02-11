@@ -38,6 +38,9 @@ The indexes optimize these common operations:
 - **File listing** - `MATCH (d:Document) WHERE d.sourceFile IS NOT NULL RETURN d.sourceFile, count(*)`
 - **Cross-reference lookups** - `MATCH (d:Document) WHERE d.filename = $filename RETURN d.text ORDER BY d.sectionIndex, d.chunkIndex`
 - **Adventure lists** - `MATCH (d:Document) WHERE d.adventureName IS NOT NULL RETURN DISTINCT d.adventureName`
+- **Vector similarity search (RAG)** - `CALL db.index.vector.queryNodes('vector', 10, $embedding)`
+- **Chunk linking** - `MATCH (d:Document) WHERE d.id = $id`
+- **File node lookup/deletes** - `MATCH (f:File) WHERE f.filename = $filename` / `MATCH (f:File) WHERE f.sourceFile = $sourceFile`
 
 ## Verifying Indexes
 
@@ -82,9 +85,11 @@ If you need to rebuild indexes:
 ```cypher
 // Drop indexes (constraints will remain)
 DROP INDEX document_source_file IF EXISTS;
+DROP INDEX vector IF EXISTS;
 DROP INDEX document_filename IF EXISTS;
 DROP INDEX document_adventure_name IF EXISTS;
 DROP INDEX document_filename_section_chunk IF EXISTS;
+DROP INDEX file_source_file IF EXISTS;
 
 // Then re-run the index creation script
 ```

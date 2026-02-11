@@ -1,5 +1,7 @@
 ## Event: {event.summary}
-
-{#if event.turnNumber}- **Turn:** {event.turnNumber}{/if}
-{#if event.participants.size > 0}- **Participants:** {#each event.participants}{it.name}{#if it_hasNext}, {/if}{/each}{/if}
-{#if event.locations.size > 0}- **Locations:** {#each event.locations}{it.name}{#if it_hasNext}, {/if}{/each}{/if}
+{#if event.turnNumber}
+- **Turn:** {event.turnNumber}
+{/if}{#if event.participants.size > 0}
+- **Participants:** {#each event.participants}{it.name}{#if it_hasNext}, {/if}{/each}
+{/if}{#if event.locations.size > 0}- **Locations:** {#each event.locations}{it.name}{#if it_hasNext}, {/if}{/each}
+{/if}

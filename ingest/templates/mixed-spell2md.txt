@@ -1,0 +1,46 @@
+---
+name: {resource.name.quotedEscaped}
+filename: {resource.vaultPath}
+label: Spell
+{#if resource.sourceAndPage }
+loreSources:
+{#each resource.sourceAndPage}
+- {it.longName.quotedEscaped}
+{/each}
+{/if}{#if resource.aliases.size > 1 }
+aliases:
+{#each resource.aliases.skipFirst}
+- {it}
+{/each}{/if}{#if resource.tags }
+loreTags:
+{#each resource.tags}{#if !it.contains("compendium") }
+- {it}
+{/if}{/each}{/if}{#if resource.hasImages }
+images:
+{#each resource.fluffImages}
+- {it.vaultPath}
+{/each}{/if}
+---
+# {resource.name}
+%%-- Embedded content starts on the next line. --%%
+*{resource.level}, {resource.school}{#if resource.ritual} (ritual){/if}*  
+
+- **Casting time:** {resource.time}{#if resource.ritual} unless cast as a ritual{/if}
+- **Range:** {resource.range}
+- **Components:** {resource.components}
+- **Duration:** {resource.duration}
+
+{resource.text}
+
+{#if resource.hasSections }
+## Summary
+
+{/if}{#if resource.references }
+**References**:
+
+{#each resource.references}
+- {it}
+{/each}
+{/if}
+
+============

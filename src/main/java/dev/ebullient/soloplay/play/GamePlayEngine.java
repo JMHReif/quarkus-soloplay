@@ -23,6 +23,7 @@ import dev.ebullient.soloplay.play.model.PlayerActor;
 import dev.ebullient.soloplay.play.model.PlayerChoices;
 import dev.ebullient.soloplay.play.model.RollResult;
 import dev.ebullient.soloplay.play.model.Stash;
+import io.quarkus.logging.Log;
 
 @ApplicationScoped
 public class GamePlayEngine {
@@ -170,6 +171,10 @@ public class GamePlayEngine {
 
         if (response.patches() != null) {
             for (Patch patch : response.patches()) {
+                if (patch.type() == null) {
+                    Log.warnf("Skipping patch with null type: %s", patch);
+                    continue;
+                }
                 switch (patch.type()) {
                     case "actor" -> {
                         var merged = handleActor(game, patch);

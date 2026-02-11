@@ -51,15 +51,15 @@ public class LoreResource {
     Neo4jHealth neo4jHealth;
 
     /**
-     * Query lore with optional contentType filter.
+     * Query lore with optional label filter.
      *
      * @param question The search question
-     * @param contentType Optional filter (e.g., "monster", "item", "spell", "vehicle")
+     * @param label Optional filter (e.g., "Monster", "Item", "Spell", "Vehicle")
      */
     @GET
     @Produces(MediaType.TEXT_HTML)
-    public String lore(@RestQuery String question, @RestQuery String contentType) {
-        String queryWithFilter = buildFilteredQuery(question, contentType);
+    public String lore(@RestQuery String question, @RestQuery String label) {
+        String queryWithFilter = buildFilteredQuery(question, label);
         JsonChatResponse chatResponse = settingAssistant.lore(queryWithFilter);
         return prettify.markdownToHtml(chatResponse.response());
     }
@@ -67,9 +67,9 @@ public class LoreResource {
     /**
      * Build query with optional filter prefix.
      */
-    private String buildFilteredQuery(String question, String contentType) {
-        if (contentType != null && !contentType.isBlank()) {
-            return "[filter:" + contentType.trim() + "] " + question;
+    private String buildFilteredQuery(String question, String label) {
+        if (label != null && !label.isBlank()) {
+            return "[filter:" + label.trim() + "] " + question;
         }
         return question;
     }
@@ -101,16 +101,16 @@ public class LoreResource {
     }
 
     /**
-     * Query lore via POST with optional contentType filter.
+     * Query lore via POST with optional label filter.
      *
      * @param question The search question (body)
-     * @param contentType Optional filter (e.g., "monster", "item", "spell", "vehicle")
+     * @param label Optional filter (e.g., "Monster", "Item", "Spell", "Vehicle")
      */
     @POST
     @Consumes(MediaType.TEXT_PLAIN)
     @Produces(MediaType.TEXT_HTML)
-    public String postLore(String question, @RestQuery String contentType) {
-        String queryWithFilter = buildFilteredQuery(question, contentType);
+    public String postLore(String question, @RestQuery String label) {
+        String queryWithFilter = buildFilteredQuery(question, label);
         JsonChatResponse chatResponse = settingAssistant.lore(queryWithFilter);
         return prettify.markdownToHtml(chatResponse.response());
     }

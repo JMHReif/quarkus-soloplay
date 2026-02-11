@@ -1,0 +1,29 @@
+{@dev.ebullient.convert.tools.dnd5e.qute.QuteBackground resource}
+---
+name: {resource.name.quotedEscaped}
+filename: {resource.vaultPath}
+label: Background
+{#if resource.sourceAndPage }
+loreSources:
+{#each resource.sourceAndPage}
+- {it.longName.quotedEscaped}
+{/each}
+{/if}{#if resource.aliases.size > 1 }
+aliases:
+{#each resource.aliases.skipFirst}
+- {it}
+{/each}{/if}{#if resource.tags }
+loreTags:
+{#each resource.tags}{#if !it.contains("compendium") }
+- {it}
+{/if}{/each}{/if}{#if resource.hasImages }
+images:
+{#each resource.fluffImages}
+- {it.vaultPath}
+{/each}{/if}
+---
+# {resource.name}
+
+{resource.text}
+
+============

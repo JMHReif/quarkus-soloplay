@@ -1,0 +1,44 @@
+{@dev.ebullient.convert.tools.dnd5e.qute.Tools5eQuteNote resource}
+{#if !resource.vaultPath.contains("credits")}
+---
+name: {resource.name.quotedEscaped}
+filename: {resource.vaultPath}
+{#if resource.vaultPath.startsWith("adventures/")}
+label: Adventure
+{#else if resource.vaultPath.startsWith("books/")}
+label: Book
+{#else}
+label: Note
+{/if}
+{#if resource.vaultPath.startsWith("adventures/")}
+adventureName: {resource.sourceAndPage.iterator().next().longName.quotedEscaped}
+{/if}{#if resource.vaultPath.startsWith("books/")}
+book: {resource.sourceAndPage.iterator().next().longName.quotedEscaped}
+{/if}
+{#if resource.aliases.size > 1 }
+aliases:
+{#each resource.aliases.skipFirst}
+- {it}
+{/each}{/if}
+loreTags:
+{#if resource.vaultPath.startsWith("adventures/") }
+- lore/adventure
+{/if}{#if resource.vaultPath.startsWith("books/") }
+- lore/book
+{/if}
+{#each resource.tags}{#if !it.contains("compendium") }
+- {it}
+{/if}{/each}
+{#if resource.sourceAndPage }
+loreSources:
+{#each resource.sourceAndPage}
+- {it.longName.quotedEscaped}
+{/each}
+{/if}
+---
+# {resource.name}
+
+{resource.text}
+
+============
+{/if}

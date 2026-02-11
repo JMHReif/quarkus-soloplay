@@ -45,5 +45,6 @@ nb-configuration.xml
 .certs/
 
 tmp
+ingest/output*
 .claude/settings.local.json
 .claude/skills/skill-creator

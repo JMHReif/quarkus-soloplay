@@ -9,24 +9,71 @@ import jakarta.inject.Inject;
 
 import org.neo4j.ogm.session.SessionFactory;
 
+import dev.ebullient.soloplay.play.model.FileNode;
+import dev.langchain4j.data.document.Document;
 import io.quarkus.logging.Log;
 
 @ApplicationScoped
 public class LoreRepository {
+
     @Inject
     SessionFactory sessionFactory;
+
+    public void createFileNode(Document document) {
+        String filename = document.metadata().getString("filename");
+        if (filename == null) {
+            return;
+        }
+        String sourceFile = document.metadata().getString("sourceFile");
+        String group = document.metadata().getString("group");
+        String text = (group == null || group.isBlank())
+                ? document.text()
+                : group + document.text();
+        var session = sessionFactory.openSession();
+        try (var tx = session.beginTransaction()) {
+            var fileNode = new FileNode(filename, sourceFile, text);
+            session.save(fileNode);
+            tx.commit();
+        } catch (Exception e) {
+            Log.errorf(e, "Error saving file node: %s", e.getMessage());
+        }
+    }
 
     /**
      * Retrieve document content by filename (from YAML frontmatter).
      * Used for resolving cross-references in campaign documents.
      *
      * @param filename The filename (e.g., "backgrounds/acolyte-xphb.md")
-     * @return Concatenated text content, or null if not found
+     * @return text content
      */
     public String getDocumentByFilename(String filename) {
         var session = sessionFactory.openSession();
-
         try {
+            // Prefer a single :File node (one resource per node).
+            String fileCypher = """
+                    MATCH (n:File)
+                    WHERE n.filename = $filename
+                       OR n.filename = $filenameWithMd
+                       OR n.filename = $filenameWithoutMd
+                    RETURN n.text as text
+                    LIMIT 1
+                    """;
+
+            String filenameWithMd = filename.endsWith(".md") ? filename : filename + ".md";
+            String filenameWithoutMd = filename.endsWith(".md") ? filename.substring(0, filename.length() - 3) : filename;
+
+            Iterable<Map<String, Object>> fileResults = session.query(fileCypher, Map.of(
+                    "filename", filename,
+                    "filenameWithMd", filenameWithMd,
+                    "filenameWithoutMd", filenameWithoutMd));
+
+            for (Map<String, Object> row : fileResults) {
+                String text = (String) row.get("text");
+                if (text != null && !text.isBlank()) {
+                    return text;
+                }
+            }
+
             // Try exact match first, then with/without .md extension
             String cypher = """
                     MATCH (n:Document)
@@ -36,9 +83,6 @@ public class LoreRepository {
                     RETURN n.text as text
                     ORDER BY n.sectionIndex, n.chunkIndex
                     """;
-
-            String filenameWithMd = filename.endsWith(".md") ? filename : filename + ".md";
-            String filenameWithoutMd = filename.endsWith(".md") ? filename.substring(0, filename.length() - 3) : filename;
 
             Iterable<Map<String, Object>> results = session.query(cypher, Map.of(
                     "filename", filename,
@@ -61,15 +105,14 @@ public class LoreRepository {
             }
             return content.toString();
         } catch (Exception e) {
-            Log.errorf(e, "Error retrieving document by filename: %s", e.getMessage());
-            return null;
+            Log.errorf(e, "Error retrieving file node: %s", e.getMessage());
         }
+        return null;
     }
 
     /**
      * List all available adventures from ingested documents.
      * Adventures are identified by having an "adventureName" attribute
-     * (typically from contentType="adventure-part" or "adventure-reference").
      * Returns a list of distinct adventure names.
      */
     public List<String> listAdventures() {
@@ -129,7 +172,6 @@ public class LoreRepository {
             String cypher = """
                     MATCH (n:Document)
                     WHERE n.adventureName = $adventureName
-                      AND ('lore/adventure-part' IN n.tags OR 'lore/adventure-reference' IN n.tags)
                       AND toLower(n.text) CONTAINS toLower($keyword)
                     RETURN n.text as text, n.section as section
                     ORDER BY n.sectionIndex, n.chunkIndex

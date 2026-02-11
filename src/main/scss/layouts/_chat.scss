@@ -12,6 +12,7 @@ body:has(main.chat-area) {
 // Chat area container - ensures proper flex layout for scrolling
 main.chat-area {
   overflow: hidden;
+  position: relative;
 }
 
 // Message container

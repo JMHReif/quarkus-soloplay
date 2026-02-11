@@ -1,0 +1,63 @@
+---
+name: {resource.name.quotedEscaped}
+filename: {resource.vaultPath}
+label: Object
+{#if resource.sourceAndPage }
+loreSources:
+{#each resource.sourceAndPage}
+- {it.longName.quotedEscaped}
+{/each}
+{/if}{#if resource.aliases.size > 1 }
+aliases:
+{#each resource.aliases.skipFirst}
+- {it}
+{/each}{/if}
+loreTags:
+- lore/statblock
+{#if resource.isNpc }
+- lore/npc/{resource.books.first}
+{/if}
+{#each resource.tags}{#if !it.contains("compendium") }
+- {it}
+{/if}{/each}{#if resource.hasImages }
+images:
+{#each resource.fluffImages}
+- {it.vaultPath}
+{/each}{/if}
+{#if resource.token}
+token: {resource.token.vaultPath}
+{/if}
+---
+# {resource.name}
+
+{resource.text}
+
+## {resource.name} Statblock
+*{resource.size} {resource.objectType}{#if resource.creatureType } ({resource.creatureType}){/if}*
+
+- **Armor Class** {#if resource.ac }{resource.ac} {/if}{#if resource.acText }({resource.acText}){/if}
+- **Hit Points** {resource.hp or ' '} {#if resource.hpText }({resource.hpText}){/if}
+- **Speed** {resource.speed}
+
+STR: {resource.scores.str} | DEX: {resource.scores.dex} | CON: {resource.scores.con}
+INT: {resource.scores.int} | WIS: {resource.scores.wis} | CHA: {resource.scores.cha}
+
+{#if resource.senses }
+- **Senses** {resource.senses}
+{/if}{#if resource.vulnerable }
+- **Damage Vulnerabilities** {resource.vulnerable}
+{/if}{#if resource.resist}
+- **Damage Resistances** {resource.resist}
+{/if}{#if resource.immune}
+- **Damage Immunities** {resource.immune}
+{/if}{#if resource.conditionImmune}
+- **Condition Immunities** {resource.conditionImmune}
+{/if}{#if resource.action}
+
+## {resource.name} Actions
+{#for action in resource.action}
+
+{#if action.name }***{action.name}.*** {/if}{action.desc}
+{/for}{/if}
+
+============
