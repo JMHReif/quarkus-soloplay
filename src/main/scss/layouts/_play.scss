@@ -43,6 +43,7 @@
     &.disconnected, &.error { background-color: var(--color-error-border); }
 }
 
+<<<<<<< Updated upstream
 // Draft panel - displays current draft state
 .draft-panel {
     max-height: 25vh;
@@ -129,10 +130,75 @@
 
         .draft-label {
             flex-basis: 100%;
+=======
+// Pending roll card
+.pending-roll {
+    background: var(--color-bg-elevated);
+    border: 2px solid var(--color-warning-border);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-md);
+    margin: var(--spacing-sm) 0;
+
+    .roll-header {
+        color: var(--color-warning-border);
+        margin-bottom: var(--spacing-xs);
+    }
+
+    .roll-details {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--spacing-sm);
+        margin-bottom: var(--spacing-sm);
+
+        span {
+            background: var(--color-bg-base);
+            padding: var(--spacing-xs) var(--spacing-sm);
+            border-radius: var(--radius-sm);
+            font-size: 0.9em;
+        }
+
+        .roll-dc {
+            font-weight: bold;
+            color: var(--color-text-accent);
+        }
+    }
+
+    .roll-actions {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+        margin-top: var(--spacing-sm);
+
+        .roll-button {
+            background: var(--color-text-accent);
+            color: var(--color-bg-base);
+            border: none;
+            padding: var(--spacing-sm) var(--spacing-md);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: bold;
+            transition: transform 0.1s, box-shadow 0.1s;
+
+            &:hover {
+                transform: scale(1.05);
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            }
+
+            &:active {
+                transform: scale(0.98);
+            }
+        }
+
+        .roll-or {
+            color: var(--color-text-muted);
+            font-size: 0.85em;
+>>>>>>> Stashed changes
         }
     }
 }
 
+<<<<<<< Updated upstream
 .draft-label {
     color: var(--color-text-secondary);
     font-size: 0.85rem;
@@ -174,3 +240,52 @@
     font-style: italic;
     margin: 0;
 }
+=======
+// Roll result card
+.roll-result {
+    background: var(--color-bg-elevated);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-md);
+    margin: var(--spacing-sm) 0;
+    text-align: center;
+
+    &.success {
+        border: 2px solid var(--color-success-border);
+        .roll-header { color: var(--color-success-border); }
+    }
+
+    &.failure {
+        border: 2px solid var(--color-error-border);
+        .roll-header { color: var(--color-error-border); }
+    }
+
+    .roll-header {
+        font-size: 1.2em;
+        margin-bottom: var(--spacing-xs);
+    }
+
+    .roll-details {
+        display: flex;
+        justify-content: center;
+        align-items: baseline;
+        gap: var(--spacing-sm);
+
+        .roll-total {
+            font-size: 2em;
+            font-weight: bold;
+            color: var(--color-text-primary);
+        }
+
+        .roll-breakdown {
+            color: var(--color-text-muted);
+            font-size: 0.9em;
+        }
+    }
+
+    .roll-context {
+        margin-top: var(--spacing-xs);
+        color: var(--color-text-muted);
+        font-style: italic;
+    }
+}
+>>>>>>> Stashed changes

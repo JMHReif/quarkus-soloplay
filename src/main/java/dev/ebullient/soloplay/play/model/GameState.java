@@ -26,10 +26,48 @@ public class GameState extends BaseEntity {
         }
     }
 
+    public enum CharacterCreationStage {
+        NAME, // Get character name
+        CLASS, // Get character class
+        LEVEL, // Get character level
+        SUMMARY, // Get brief summary
+        DESCRIPTION, // Get description
+        TAGS, // Get tags (race, background, etc.)
+        REVIEW, // Review and confirm
+        COMPLETE; // Done
+
+        public CharacterCreationStage next() {
+            return switch (this) {
+                case NAME -> CLASS;
+                case CLASS -> LEVEL;
+                case LEVEL -> SUMMARY;
+                case SUMMARY -> DESCRIPTION;
+                case DESCRIPTION -> TAGS;
+                case TAGS -> REVIEW;
+                case REVIEW -> COMPLETE;
+                case COMPLETE -> COMPLETE;
+            };
+        }
+
+        public String fieldName() {
+            return switch (this) {
+                case NAME -> "name";
+                case CLASS -> "class";
+                case LEVEL -> "level";
+                case SUMMARY -> "summary";
+                case DESCRIPTION -> "description";
+                case TAGS -> "tags";
+                case REVIEW -> "review";
+                case COMPLETE -> "complete";
+            };
+        }
+    }
+
     @Id
     String gameId;
     String adventureName;
     GamePhase gamePhase;
+    CharacterCreationStage characterCreationStage;
 
     // Gameplay state
     int turnNumber; // Increment each turn
@@ -96,6 +134,20 @@ public class GameState extends BaseEntity {
 
     public void setCurrentLocation(String currentLocation) {
         this.currentLocation = currentLocation;
+    }
+
+    public CharacterCreationStage getCharacterCreationStage() {
+        return characterCreationStage == null ? CharacterCreationStage.NAME : characterCreationStage;
+    }
+
+    public void setCharacterCreationStage(CharacterCreationStage stage) {
+        this.characterCreationStage = stage;
+        markDirty();
+    }
+
+    public void advanceCharacterCreationStage() {
+        this.characterCreationStage = getCharacterCreationStage().next();
+        markDirty();
     }
 
     public <T extends Stash> T getStash(String key, Class<T> clazz) {

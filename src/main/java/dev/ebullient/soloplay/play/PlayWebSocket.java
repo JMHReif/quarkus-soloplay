@@ -174,17 +174,29 @@ public class PlayWebSocket {
             if (response instanceof GameResponse.Error error) {
                 broadcastToGameId(new PlayWsServerMessage.Error(assistantId, error.message()));
             } else if (response instanceof GameResponse.Reply reply) {
+<<<<<<< Updated upstream
                 String assistantMarkdown = reply.assistantMarkdown() == null ? "" : reply.assistantMarkdown();
                 String assistantHtml = prettify.markdownToHtml(assistantMarkdown);
                 broadcastToGameId(new PlayWsServerMessage.AssistantDone(assistantId, assistantMarkdown, assistantHtml));
 
                 // Effects include both display effects and stateful effects for round-trip
+=======
+                // Send effects BEFORE narrative (e.g., roll results shown first)
+>>>>>>> Stashed changes
                 for (GameEffect effect : reply.effects()) {
                     PlayWsServerMessage outbound = toServerMessage(effect);
                     if (outbound != null) {
                         broadcastToGameId(outbound);
                     }
                 }
+
+                String assistantMarkdown = reply.assistantMarkdown() == null ? "" : reply.assistantMarkdown();
+                Log.debugf("Reply markdown length: %d, first 100 chars: %s",
+                        assistantMarkdown.length(),
+                        assistantMarkdown.substring(0, Math.min(100, assistantMarkdown.length())));
+                String assistantHtml = prettify.markdownToHtml(assistantMarkdown);
+                Log.debugf("Reply HTML length: %d", assistantHtml.length());
+                broadcastToGameId(new PlayWsServerMessage.AssistantDone(assistantId, assistantMarkdown, assistantHtml));
 
                 appendToHistory("assistant", assistantMarkdown, assistantHtml);
             } else {

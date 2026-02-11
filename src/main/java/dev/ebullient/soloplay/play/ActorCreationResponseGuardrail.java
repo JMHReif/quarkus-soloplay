@@ -32,6 +32,7 @@ public class ActorCreationResponseGuardrail implements OutputGuardrail {
         String text = responseFromLLM.text();
         Log.debugf("Guardrail validating: %s", text);
         try {
+<<<<<<< Updated upstream
             ActorCreationResponse response = objectMapper.readValue(text, ActorCreationResponse.class);
             if (response.message() == null || response.message().isBlank()) {
                 Log.warn("Guardrail: missing message field");
@@ -41,6 +42,25 @@ public class ActorCreationResponseGuardrail implements OutputGuardrail {
             return OutputGuardrailResult.successWith(text, response);
         } catch (JsonProcessingException e) {
             Log.warnf("Guardrail JSON parse error: %s\nInput was: %s", e.getMessage(), text);
+=======
+            Log.debugf("ActorCreation AiMessage: %s", responseFromLLM.text());
+            ActorCreationResponse response = objectMapper.readValue(responseFromLLM.text(), ActorCreationResponse.class);
+            Log.debugf("ActorCreation parsed response - messageMarkdown: %s",
+                    response.messageMarkdown() == null ? "(null)"
+                            : response.messageMarkdown().substring(0, Math.min(100, response.messageMarkdown().length())));
+
+            // Validate required field is present
+            if (response.messageMarkdown() == null || response.messageMarkdown().isBlank()) {
+                Log.warnf("ActorCreation response missing messageMarkdown field");
+                return reprompt("Missing messageMarkdown",
+                        "Your response must include a 'messageMarkdown' field with your message to the player. " +
+                                "Return JSON like: {\"messageMarkdown\": \"your message here\", \"patch\": {...}}");
+            }
+
+            return OutputGuardrailResult.successWith(responseFromLLM.text(), response);
+        } catch (JsonProcessingException e) {
+            Log.warnf("ActorCreation JSON parse failed: %s", e.getMessage());
+>>>>>>> Stashed changes
             return reprompt(REPROMPT_MESSAGE, e, REPROMPT_PROMPT);
         }
     }

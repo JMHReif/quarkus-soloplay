@@ -48,7 +48,7 @@ public class NamedBaseEntity extends BaseEntity {
         return id;
     }
 
-    void setId(String id) {
+    public void setId(String id) {
         this.id = id;
         markDirty();
     }
@@ -57,7 +57,7 @@ public class NamedBaseEntity extends BaseEntity {
         return gameId;
     }
 
-    void setGameId(String gameId) {
+    public void setGameId(String gameId) {
         this.gameId = gameId;
         if (this.id != null) {
             this.id = gameId + ":" + slugify(name);

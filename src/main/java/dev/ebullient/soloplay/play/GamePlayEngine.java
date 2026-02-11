@@ -117,6 +117,9 @@ public class GamePlayEngine {
         // Roll is resolved - clear the pending roll by sending a clear effect
         var clearEffect = rollHandler.clearPendingRollEffect();
 
+        // Send the roll result to chat immediately so player sees their roll
+        var rollResultEffect = new GameEffect.HtmlFragment("roll_result", rollResult.render());
+
         var response = assistant.resolveRoll(
                 game.getGameId(),
                 game.getAdventureName(),
@@ -125,7 +128,11 @@ public class GamePlayEngine {
                 game.getStash(EVENT_STASH, Event.class),
                 rollResult);
 
+<<<<<<< Updated upstream
         return processResponse(game, response, emitter, clearEffect);
+=======
+        return processResponse(game, response, emitter, rollResultEffect);
+>>>>>>> Stashed changes
     }
 
     private GameResponse processResponse(GameState game, GamePlayResponse response, GameEventEmitter emitter) {
@@ -133,7 +140,11 @@ public class GamePlayEngine {
     }
 
     private GameResponse processResponse(GameState game, GamePlayResponse response, GameEventEmitter emitter,
+<<<<<<< Updated upstream
             StatefulEffect additionalEffect) {
+=======
+            GameEffect additionalEffect) {
+>>>>>>> Stashed changes
         if (response == null || response.narration() == null) {
             return GameResponse.error("No response from GM");
         }
@@ -144,11 +155,31 @@ public class GamePlayEngine {
         emitter.assistantDelta("Updating world state…\n");
         patchesAndEvents(game, response);
 
+<<<<<<< Updated upstream
         // Create pending roll effect if present (for round-trip through client)
         var pendingRollEffect = rollHandler.createPendingRollEffect(response.pendingRoll());
 
         // Build response with effects
         var reply = GameResponse.reply(response.narration());
+=======
+        // Store pending roll if present
+        emitter.assistantDelta("Checking for pending roll…\n");
+        var pendingRollEffect = storePendingRoll(game, response.pendingRoll());
+
+        // Collect all effects
+        java.util.List<GameEffect> effects = new java.util.ArrayList<>();
+        if (additionalEffect != null) {
+            effects.add(additionalEffect);
+        }
+        if (pendingRollEffect != null) {
+            effects.add(pendingRollEffect);
+        }
+
+        return effects.isEmpty()
+                ? GameResponse.reply(response.narration())
+                : GameResponse.reply(response.narration(), effects.toArray(new GameEffect[0]));
+    }
+>>>>>>> Stashed changes
 
         if (pendingRollEffect != null) {
             reply = reply.withEffects(pendingRollEffect);

@@ -25,11 +25,24 @@ import io.quarkus.logging.Log;
 public class IngestService {
     static final String TOOLS_DOC_SEPARATOR = "============\n";
 
+<<<<<<< Updated upstream
     // Regex pattern for markdown section headers (## Header)
+=======
+    // Regex pattern for YAML frontmatter
+    // (?s) enables DOTALL mode (. matches newlines)
+    // ^--- matches opening ---
+    // (.*?) captures content (non-greedy)
+    // \n--- matches closing ---
+    static final java.util.regex.Pattern YAML_FRONTMATTER_PATTERN = java.util.regex.Pattern
+            .compile("(?s)^---\\s*\\n(.*?)\\n---\\s*\\n");
+
+    // Regex pattern for markdown section headers (## through ##### headers)
+>>>>>>> Stashed changes
     // (?m) enables multiline mode (^ matches line starts)
-    // Positive lookahead (?=^##) splits before headers without consuming them
+    // Positive lookahead splits before headers without consuming them
+    // Matches header levels 2-5: ##, ###, ####, #####
     static final java.util.regex.Pattern SECTION_HEADER_PATTERN = java.util.regex.Pattern
-            .compile("(?m)(?=^## )");
+            .compile("(?m)(?=^#{2,5} )");
 
     @ConfigProperty(name = "campaign.chunk.size", defaultValue = "500")
     int chunkSize;
@@ -49,6 +62,7 @@ public class IngestService {
     @Inject
     LoreRepository loreRepository;
 
+<<<<<<< Updated upstream
     @Inject
     MarkdownDocumentParser markdownParser;
 
@@ -57,6 +71,11 @@ public class IngestService {
 
         boolean isAdventureFile = "adventures.txt".equals(sourceFile);
         List<String> allChunkIds = isAdventureFile ? new ArrayList<>() : null;
+=======
+        boolean isAdventureFile = "adventures.txt".equals(filename);
+        List<String> allChunkIds = new ArrayList<>();
+        int[] globalSequence = { 0 };
+>>>>>>> Stashed changes
 
         if (content.contains(TOOLS_DOC_SEPARATOR)) {
             String[] parts = content.split(TOOLS_DOC_SEPARATOR);
@@ -64,37 +83,97 @@ public class IngestService {
             int processedCount = 0;
             for (String part : parts) {
                 String trimmed = part.trim();
-                // Skip empty parts and parts that are just the separator
                 if (!trimmed.isBlank() && !trimmed.equals("============")) {
+<<<<<<< Updated upstream
                     Document document = markdownParser.parse(sourceFile, trimmed);
                     loreRepository.createFileNode(document);
                     List<String> chunkIds = chunkDocument(document);
                     if (allChunkIds != null) {
                         allChunkIds.addAll(chunkIds);
                     }
+=======
+                    List<String> chunkIds = processStructuredMarkdown(filename, trimmed, globalSequence, isAdventureFile);
+                    allChunkIds.addAll(chunkIds);
+>>>>>>> Stashed changes
                     processedCount++;
                 }
             }
             Log.infof("Processed %d non-empty notes from %s", processedCount, sourceFile);
         } else {
+<<<<<<< Updated upstream
             Document document = markdownParser.parse(sourceFile, content.trim());
             loreRepository.createFileNode(document);
             List<String> chunkIds = chunkDocument(document);
             if (allChunkIds != null) {
                 allChunkIds.addAll(chunkIds);
             }
+=======
+            List<String> chunkIds = processStructuredMarkdown(filename, content.trim(), globalSequence, isAdventureFile);
+            allChunkIds.addAll(chunkIds);
+>>>>>>> Stashed changes
         }
 
-        // For adventures.txt, create NEXT relationships between chunks
-        if (isAdventureFile && allChunkIds != null && !allChunkIds.isEmpty()) {
-            createChunkRelationships(allChunkIds);
+        // For adventure files, add label and create one long NEXT chain
+        if (isAdventureFile && !allChunkIds.isEmpty()) {
+            addLabelToNodes(allChunkIds, "Adventure");
+            if (allChunkIds.size() > 1) {
+                createChunkRelationships(allChunkIds);
+            }
+            Log.infof("Adventure: %d chunks linked sequentially", allChunkIds.size());
         }
 
         Log.infof("Completed processing file: %s", sourceFile);
     }
 
+<<<<<<< Updated upstream
     private List<String> chunkDocument(Document document) {
         Metadata common = document.metadata();
+=======
+    /**
+     * Convert numeric fields from strings to integers in Neo4j.
+     * The embedding store may serialize all metadata as strings.
+     */
+    private void convertNumericFields(List<String> nodeIds) {
+        if (nodeIds.isEmpty()) {
+            return;
+        }
+
+        var session = sessionFactory.openSession();
+        var tx = session.beginTransaction();
+
+        try {
+            String cypher = """
+                    MATCH (d:Document)
+                    WHERE d.id IN $nodeIds
+                    SET d.partIndex = CASE WHEN d.partIndex IS NOT NULL THEN toInteger(d.partIndex) ELSE null END,
+                        d.partNumber = CASE WHEN d.partNumber IS NOT NULL THEN toInteger(d.partNumber) ELSE null END,
+                        d.sectionIndex = CASE WHEN d.sectionIndex IS NOT NULL THEN toInteger(d.sectionIndex) ELSE null END,
+                        d.chunkIndex = CASE WHEN d.chunkIndex IS NOT NULL THEN toInteger(d.chunkIndex) ELSE null END,
+                        d.sequenceNumber = CASE WHEN d.sequenceNumber IS NOT NULL THEN toInteger(d.sequenceNumber) ELSE null END,
+                        d.chapterNumber = CASE WHEN d.chapterNumber IS NOT NULL THEN toInteger(d.chapterNumber) ELSE null END,
+                        d.index = CASE WHEN d.index IS NOT NULL THEN toInteger(d.index) ELSE null END
+                    """;
+            session.query(cypher, Map.of("nodeIds", nodeIds));
+
+            tx.commit();
+            Log.debugf("Converted numeric fields for %d nodes", nodeIds.size());
+        } catch (Exception e) {
+            tx.rollback();
+            Log.errorf(e, "Error converting numeric fields: %s", e.getMessage());
+        } finally {
+            tx.close();
+        }
+    }
+
+    private List<String> processStructuredMarkdown(String filename, String content, int[] globalSequence,
+            boolean isAdventureFile) {
+        // Parse YAML frontmatter
+        // Note: structured frontmatter includes the real filename
+        // Keep ingest sourceFile for traceability + allow re-processing
+        Map<String, Object> yamlMetadata = parseYamlFrontmatter(content);
+        yamlMetadata.put("sourceFile", filename);
+        yamlMetadata.put("canonical", "true");
+>>>>>>> Stashed changes
 
         String sourceFile = common.getString("sourceFile");
         String prefix = common.getString("group");
@@ -134,8 +213,16 @@ public class IngestService {
                         subSegment.metadata()
                                 .put("section", sectionTitle)
                                 .put("sectionIndex", sectionIndex)
+<<<<<<< Updated upstream
                                 .put("chunkIndex", chunkIndex++);
 
+=======
+                                .put("chunkIndex", chunkIndex++)
+                                .put("sequenceNumber", globalSequence[0]++)
+                                .put("sourceFile", filename)
+                                .put("canonical", "true");
+                        subSegment.metadata().putAll(yamlMetadata);
+>>>>>>> Stashed changes
                         segments.add(subSegment);
                     }
 
@@ -150,7 +237,8 @@ public class IngestService {
                     segment.metadata()
                             .put("section", sectionTitle)
                             .put("sectionIndex", sectionIndex)
-                            .put("chunkIndex", 0);
+                            .put("chunkIndex", 0)
+                            .put("sequenceNumber", globalSequence[0]++);
                     segments.add(segment);
                 }
                 sectionIndex++;
@@ -161,7 +249,8 @@ public class IngestService {
                     common);
             segment.metadata()
                     .put("sectionIndex", 0)
-                    .put("chunkIndex", 0);
+                    .put("chunkIndex", 0)
+                    .put("sequenceNumber", globalSequence[0]++);
             segments.add(segment);
         }
 
@@ -177,9 +266,16 @@ public class IngestService {
         List<String> chunkIds = embeddingStore.addAll(embeddings, segments);
         Log.infof("Stored %d embeddings for %s", embeddings.size(), sourceFile);
 
+        // Convert numeric fields from strings to integers
+        convertNumericFields(chunkIds);
+
         // Create NEXT relationships for chunked sections (non-adventure files only)
+<<<<<<< Updated upstream
         // Adventure files handle this separately with relationships across all chunks
         boolean isAdventureFile = "adventures.txt".equals(sourceFile);
+=======
+        // Adventure files create one long NEXT chain at the end in ingestFile()
+>>>>>>> Stashed changes
         if (!isAdventureFile && !chunkedSectionRanges.isEmpty()) {
             createSectionChunkRelationships(chunkIds, chunkedSectionRanges);
         }
@@ -198,7 +294,8 @@ public class IngestService {
     }
 
     /**
-     * Create NEXT relationships between sequential chunks for adventure files.
+     * Create NEXT relationships between sequential chunks.
+     * Uses sequenceNumber metadata to ensure correct ordering.
      */
     private void createChunkRelationships(List<String> chunkIds) {
         if (chunkIds.size() < 2) {
@@ -206,20 +303,42 @@ public class IngestService {
         }
 
         var session = sessionFactory.openSession();
+<<<<<<< Updated upstream
         try (var tx = session.beginTransaction();) {
             for (int i = 0; i < chunkIds.size() - 1; i++) {
+=======
+        var tx = session.beginTransaction();
+
+        try {
+            // Query chunks back ordered by sequenceNumber to ensure correct order
+            String getOrderedChunks = """
+                    MATCH (d:Document)
+                    WHERE d.id IN $chunkIds
+                    RETURN d.id as id
+                    ORDER BY d.sequenceNumber
+                    """;
+            Iterable<Map<String, Object>> results = session.query(getOrderedChunks, Map.of("chunkIds", chunkIds));
+
+            List<String> orderedIds = new ArrayList<>();
+            for (Map<String, Object> row : results) {
+                orderedIds.add((String) row.get("id"));
+            }
+
+            // Create NEXT relationships in sequence order
+            for (int i = 0; i < orderedIds.size() - 1; i++) {
+>>>>>>> Stashed changes
                 String createNext = """
                         MATCH (d1:Document) WHERE d1.id = $fromId
                         MATCH (d2:Document) WHERE d2.id = $toId
-                        CREATE (d1)-[:NEXT]->(d2)
+                        MERGE (d1)-[:NEXT]->(d2)
                         """;
                 session.query(createNext, Map.of(
-                        "fromId", chunkIds.get(i),
-                        "toId", chunkIds.get(i + 1)));
+                        "fromId", orderedIds.get(i),
+                        "toId", orderedIds.get(i + 1)));
             }
 
             tx.commit();
-            Log.infof("Created %d NEXT relationships between chunks", chunkIds.size() - 1);
+            Log.infof("Created %d NEXT relationships between chunks (ordered by sequenceNumber)", orderedIds.size() - 1);
         } catch (Exception e) {
             Log.errorf(e, "Error creating chunk relationships: %s", e.getMessage());
             throw new RuntimeException("Failed to create chunk relationships: " + e.getMessage(), e);

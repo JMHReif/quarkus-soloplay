@@ -1,0 +1,12 @@
+<div class="roll-result {#if result.success}success{#else}failure{/if}">
+  <div class="roll-header">
+    <strong>{#if result.success}Success!{#else}Failure{/if}</strong>
+  </div>
+  <div class="roll-details">
+    <span class="roll-total">{result.total}</span>
+    <span class="roll-breakdown">({result.breakdown})</span>
+  </div>
+  {#if result.context}
+  <div class="roll-context">{result.context}</div>
+  {/if}
+</div>

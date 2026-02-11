@@ -20,7 +20,6 @@ import dev.langchain4j.rag.RetrievalAugmentor;
 import dev.langchain4j.rag.content.Content;
 import dev.langchain4j.rag.content.injector.DefaultContentInjector;
 import dev.langchain4j.rag.content.retriever.ContentRetriever;
-import dev.langchain4j.rag.query.Query;
 import io.quarkus.logging.Log;
 
 @ApplicationScoped
@@ -94,6 +93,7 @@ public class LoreRetriever implements Supplier<RetrievalAugmentor> {
             @ConfigProperty(name = "quarkus.langchain4j.neo4j.index-name", defaultValue = "vector") String indexName) {
 
         // Create Cypher-based retriever with auto-detection and fallback
+<<<<<<< Updated upstream
         // Explicit filter can be specified by prefixing query with [filter:label]
         ContentRetriever cypherRetriever = new ContentRetriever() {
             @Override
@@ -143,7 +143,55 @@ public class LoreRetriever implements Supplier<RetrievalAugmentor> {
                     Log.debugf("  [%d] %s...", i, text.substring(0, Math.min(100, text.length())));
                 }
                 return results;
+=======
+        // Explicit filter can be specified by prefixing query with [filter:contentType]
+        ContentRetriever cypherRetriever = query -> {
+            String queryText = query.text();
+
+            // Parse optional explicit filter prefix: [filter:contentType]
+            String contentType = null;
+            boolean explicitFilter = false;
+            if (queryText.startsWith("[filter:")) {
+                int endBracket = queryText.indexOf(']');
+                if (endBracket > 8) {
+                    contentType = queryText.substring(8, endBracket).trim();
+                    queryText = queryText.substring(endBracket + 1).trim();
+                    explicitFilter = true;
+                }
+>>>>>>> Stashed changes
             }
+
+            // Auto-detect contentType from query keywords if not explicitly set
+            if (contentType == null) {
+                contentType = detectContentType(queryText);
+            }
+
+            Log.debugf("RAG Query: %s", queryText);
+            if (contentType != null) {
+                Log.debugf("RAG Filter: contentType = %s (explicit=%s)", contentType, explicitFilter);
+            }
+
+            // Generate query embedding (without filter prefix)
+            float[] queryEmbedding = model.embed(queryText).content().vector();
+
+            // Execute vector similarity search with optional filter
+            List<Content> results = executeVectorSearch(sessionFactory, indexName, queryEmbedding,
+                    contentType, maxResults, minScore);
+
+            // Fallback to unfiltered search if auto-detected filter returns few results
+            if (!explicitFilter && contentType != null && results.size() < 2) {
+                Log.debugf("Auto-filtered search returned %d results, falling back to unfiltered", results.size());
+                results = executeVectorSearch(sessionFactory, indexName, queryEmbedding,
+                        null, maxResults, minScore);
+            }
+
+            Log.debugf("RAG Retrieved %d results", results.size());
+            for (int i = 0; i < results.size(); i++) {
+                Content c = results.get(i);
+                String text = c.textSegment().text();
+                Log.debugf("  [%d] %s...", i, text.substring(0, Math.min(100, text.length())));
+            }
+            return results;
         };
 
         // Custom content injector that frames RAG content clearly

@@ -12,8 +12,6 @@ public class PlayerActor extends Actor {
     public static class Templates {
         public static native TemplateInstance playerActorDetail(PlayerActor actor);
 
-        public static native TemplateInstance playerActorDraft(PlayerActorDraft draft);
-
         public static native TemplateInstance playerActorSummary(PlayerActor actor);
     }
 
@@ -22,14 +20,6 @@ public class PlayerActor extends Actor {
 
     public PlayerActor() {
         super();
-    }
-
-    public PlayerActor(String gameId, PlayerActorDraft draft) {
-        super(gameId, draft.toPatch());
-
-        this.level = draft.level();
-        this.actorClass = draft.actorClass();
-        markDirty();
     }
 
     public String getActorClass() {
