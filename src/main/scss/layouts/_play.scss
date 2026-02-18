@@ -43,94 +43,6 @@
     &.disconnected, &.error { background-color: var(--color-error-border); }
 }
 
-<<<<<<< Updated upstream
-// Draft panel - displays current draft state
-.draft-panel {
-    max-height: 25vh;
-    background: var(--color-bg-elevated);
-    border: 1px solid var(--color-text-accent);
-    border-radius: var(--radius-md);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-    z-index: 100;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-
-    &.hidden {
-        display: none;
-    }
-}
-
-@media only screen and (min-width: 800px) {
-  main.chat-area:not(:has(.draft-panel.hidden)) {
-    #chat-messages {
-      padding-right: 330px;
-    }
-    .draft-panel {
-      position: absolute;
-      top: 5px;
-      right: var(--spacing-md);
-      width: 320px;
-      height: calc(50vh - 12.5px);
-      max-height: unset;
-    }
-  }
-}
-
-.draft-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: var(--spacing-sm) var(--spacing-md);
-    background: var(--color-bg-base);
-    border-bottom: 1px solid var(--color-text-accent);
-}
-
-.draft-title {
-    font-weight: 600;
-    color: var(--color-text-accent);
-    font-size: 0.9rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-}
-
-.draft-close {
-    background: none;
-    border: none;
-    color: var(--color-text-secondary);
-    font-size: 1.2rem;
-    cursor: pointer;
-    padding: 0;
-    line-height: 1;
-
-    &:hover {
-        color: var(--color-text-primary);
-    }
-}
-
-.draft-content {
-    padding: var(--spacing-md);
-    overflow-y: auto;
-    flex: 1;
-}
-
-.draft-field {
-    display: flex;
-    align-items: baseline;
-    gap: var(--spacing-sm);
-    margin-bottom: var(--spacing-sm);
-
-    &:last-child {
-        margin-bottom: 0;
-    }
-
-    // Description (textarea) wraps label above
-    &.draft-description {
-        flex-wrap: wrap;
-
-        .draft-label {
-            flex-basis: 100%;
-=======
 // Pending roll card
 .pending-roll {
     background: var(--color-bg-elevated);
@@ -193,54 +105,10 @@
         .roll-or {
             color: var(--color-text-muted);
             font-size: 0.85em;
->>>>>>> Stashed changes
         }
     }
 }
 
-<<<<<<< Updated upstream
-.draft-label {
-    color: var(--color-text-secondary);
-    font-size: 0.85rem;
-    font-weight: 500;
-    white-space: nowrap;
-    flex-shrink: 0;
-}
-
-.draft-input {
-    flex: 1;
-    min-width: 0;
-    border: none;
-    border-bottom: 1px solid var(--color-text-accent);
-    color: var(--color-text-primary);
-    font-size: 0.9rem;
-    padding: 2px 0;
-    font-family: inherit;
-    outline: none;
-
-    &:focus {
-        border-bottom-color: var(--color-text-primary);
-    }
-
-    &::placeholder {
-        color: var(--color-text-secondary);
-        font-style: italic;
-    }
-}
-
-.draft-textarea {
-    width: 100%;
-    resize: vertical;
-    min-height: 3em;
-    line-height: 1.4;
-}
-
-.draft-empty {
-    color: var(--color-text-secondary);
-    font-style: italic;
-    margin: 0;
-}
-=======
 // Roll result card
 .roll-result {
     background: var(--color-bg-elevated);
@@ -288,4 +156,3 @@
         font-style: italic;
     }
 }
->>>>>>> Stashed changes

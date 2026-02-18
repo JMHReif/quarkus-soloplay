@@ -131,4 +131,11 @@
       text-decoration: none;
     }
   }
+
+  .choices-hint {
+    margin-top: var(--spacing-xs);
+    font-size: 0.8rem;
+    color: var(--color-text-secondary);
+    font-style: italic;
+  }
 }

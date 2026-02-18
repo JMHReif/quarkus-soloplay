@@ -12,7 +12,6 @@ import jakarta.inject.Inject;
 
 import dev.ebullient.soloplay.ai.MarkdownAugmenter;
 import dev.ebullient.soloplay.play.GameEffect.HtmlFragment;
-import dev.ebullient.soloplay.play.GameEffect.StatefulEffect;
 import dev.ebullient.soloplay.play.model.GameState;
 import io.quarkus.logging.Log;
 import io.quarkus.websockets.next.OnClose;
@@ -168,21 +167,12 @@ public class PlayWebSocket {
             broadcastToGameId(new PlayWsServerMessage.AssistantStart(assistantId));
 
             GameEventEmitter emitter = text -> broadcastToGameId(new PlayWsServerMessage.AssistantDelta(assistantId, text));
-            // Pass client stash to engine for round-trip state
-            GameResponse response = gameEngine.processRequest(gameState, playerInput, userMessage.stash(), emitter, resuming);
+            GameResponse response = gameEngine.processRequest(gameState, playerInput, emitter, resuming);
 
             if (response instanceof GameResponse.Error error) {
                 broadcastToGameId(new PlayWsServerMessage.Error(assistantId, error.message()));
             } else if (response instanceof GameResponse.Reply reply) {
-<<<<<<< Updated upstream
-                String assistantMarkdown = reply.assistantMarkdown() == null ? "" : reply.assistantMarkdown();
-                String assistantHtml = prettify.markdownToHtml(assistantMarkdown);
-                broadcastToGameId(new PlayWsServerMessage.AssistantDone(assistantId, assistantMarkdown, assistantHtml));
-
-                // Effects include both display effects and stateful effects for round-trip
-=======
                 // Send effects BEFORE narrative (e.g., roll results shown first)
->>>>>>> Stashed changes
                 for (GameEffect effect : reply.effects()) {
                     PlayWsServerMessage outbound = toServerMessage(effect);
                     if (outbound != null) {
@@ -215,8 +205,6 @@ public class PlayWebSocket {
     private static PlayWsServerMessage toServerMessage(GameEffect effect) {
         return switch (effect) {
             case HtmlFragment fragment -> new PlayWsServerMessage.AssistantExtraHtml(fragment.slot(), fragment.html());
-            case StatefulEffect stateful ->
-                new PlayWsServerMessage.StatefulUpdate(stateful.slot(), stateful.html(), stateful.stash());
             default -> null;
         };
     }

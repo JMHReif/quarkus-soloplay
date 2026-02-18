@@ -4,9 +4,7 @@ import java.util.List;
 
 import jakarta.enterprise.context.SessionScoped;
 
-import dev.ebullient.soloplay.ai.LoreRetriever;
 import dev.ebullient.soloplay.ai.LoreTools;
-import dev.ebullient.soloplay.play.model.Event;
 import dev.ebullient.soloplay.play.model.RollResult;
 import dev.langchain4j.service.MemoryId;
 import dev.langchain4j.service.SystemMessage;
@@ -15,7 +13,7 @@ import dev.langchain4j.service.guardrail.OutputGuardrails;
 import io.quarkiverse.langchain4j.RegisterAiService;
 
 @SystemMessage(fromResource = "prompts/game-play-system.txt")
-@RegisterAiService(tools = { LoreTools.class, GameTools.class }, retrievalAugmentor = LoreRetriever.class)
+@RegisterAiService(tools = { LoreTools.class, GameTools.class })
 @OutputGuardrails(GamePlayResponseGuardrail.class)
 @SessionScoped
 public interface GamePlayAssistant {
@@ -26,7 +24,9 @@ public interface GamePlayAssistant {
     GamePlayResponse sceneStart(
             @MemoryId String gameId,
             String adventureName,
-            List<String> theParty);
+            List<String> theParty,
+            String adventureContext,
+            String gameJournal);
 
     // --- Recap: Resuming a session ---
 
@@ -36,7 +36,9 @@ public interface GamePlayAssistant {
             String adventureName,
             List<String> theParty,
             String locationName,
-            String recentEvents); // formatted chat history
+            String recentEvents, // formatted chat history
+            String adventureContext,
+            String gameJournal);
 
     // --- Standard Turn: Player action (no pending roll) ---
 
@@ -46,8 +48,8 @@ public interface GamePlayAssistant {
             String adventureName,
             List<String> theParty,
             String locationName,
-            Event event,
-            String playerInput);
+            String playerInput,
+            String adventureContext);
 
     // --- Roll Resolution: Player completed a roll ---
 
@@ -57,6 +59,6 @@ public interface GamePlayAssistant {
             String adventureName,
             List<String> theParty,
             String locationName,
-            Event event,
-            RollResult rollResult);
+            RollResult rollResult,
+            String adventureContext);
 }

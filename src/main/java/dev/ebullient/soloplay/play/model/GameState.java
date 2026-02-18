@@ -72,6 +72,7 @@ public class GameState extends BaseEntity {
     // Gameplay state
     int turnNumber; // Increment each turn
     String currentLocation; // "location:docks"
+    String lastNarration; // Previous turn's narration for continuity
     Long lastPlayedAt;
 
     @Transient
@@ -134,6 +135,14 @@ public class GameState extends BaseEntity {
 
     public void setCurrentLocation(String currentLocation) {
         this.currentLocation = currentLocation;
+    }
+
+    public String getLastNarration() {
+        return lastNarration;
+    }
+
+    public void setLastNarration(String lastNarration) {
+        this.lastNarration = lastNarration;
     }
 
     public CharacterCreationStage getCharacterCreationStage() {

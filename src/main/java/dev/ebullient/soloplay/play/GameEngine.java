@@ -13,7 +13,6 @@ import dev.ebullient.soloplay.play.model.Event;
 import dev.ebullient.soloplay.play.model.GameState;
 import dev.ebullient.soloplay.play.model.GameState.GamePhase;
 import dev.ebullient.soloplay.play.model.PlayerActor;
-import dev.ebullient.soloplay.play.model.Stash;
 import io.quarkus.logging.Log;
 import io.quarkus.qute.CheckedTemplate;
 import io.quarkus.qute.TemplateInstance;
@@ -45,13 +44,14 @@ public class GameEngine {
         return gameRepository.findGameById(gameId);
     }
 
-    public GameResponse processRequest(GameState game, String playerInput, Stash clientDraft,
+    public GameResponse processRequest(GameState game, String playerInput,
             GameEventEmitter emitter, boolean resuming) {
         Objects.requireNonNull(emitter, "emitter");
         gameContext.setGameState(game, gamePlayEngine.listTheParty(game));
 
         GamePhase phase = game.getGamePhase();
-        Log.debugf("Resuming game phase: %s", phase);
+        Log.infof(">>> processRequest: phase=%s, resuming=%s, input='%s', adventure=%s",
+                phase, resuming, playerInput == null ? "" : playerInput.trim(), game.getAdventureName());
 
         String trimmed = playerInput == null ? "" : playerInput.trim();
 
@@ -77,25 +77,38 @@ public class GameEngine {
         }
 
         final GameResponse response;
-        if (createActors) {
-            response = actorCreationEngine.processRequest(game, playerInput, clientDraft, emitter);
-            gameRepository.refreshTheParty(game.getGameId());
-        } else if (game.getGamePhase() == GamePhase.SCENE_INITIALIZATION || resuming) {
-            // Check for existing events to decide: recap or fresh start
-            List<Event> events = gameRepository.listEvents(game.getGameId());
-            if (events.isEmpty()) {
-                // New game - start the opening scene
-                response = gamePlayEngine.sceneStart(game, emitter);
-                game.incrementTurn();
+        try {
+            if (createActors) {
+                Log.infof(">>> branch: CHARACTER_CREATION");
+                response = actorCreationEngine.processRequest(game, playerInput, emitter);
+                gameRepository.refreshTheParty(game.getGameId());
+
+                // Auto-save character checkpoints when creation phase completes
+                if (game.getGamePhase() != GamePhase.CHARACTER_CREATION) {
+                    saveCharacterCheckpoints(game);
+                }
+            } else if (game.getGamePhase() == GamePhase.SCENE_INITIALIZATION || resuming) {
+                // Check for existing events to decide: recap or fresh start
+                List<Event> events = gameRepository.listEvents(game.getGameId());
+                if (events.isEmpty()) {
+                    Log.infof(">>> branch: SCENE_START (no events, new game)");
+                    response = gamePlayEngine.sceneStart(game, emitter);
+                    game.incrementTurn();
+                } else {
+                    Log.infof(">>> branch: RECAP (%d events found)", events.size());
+                    String recentEvents = formatRecentEvents(events);
+                    response = gamePlayEngine.recap(game, recentEvents, emitter);
+                }
+                game.setGamePhase(game.getGamePhase().next());
             } else {
-                // Resuming - build recap from event summaries
-                String recentEvents = formatRecentEvents(events);
-                response = gamePlayEngine.recap(game, recentEvents, emitter);
+                Log.infof(">>> branch: ACTIVE_PLAY (turn %d)", game.getTurnNumber());
+                response = gamePlayEngine.processRequest(game, playerInput, emitter);
+                game.incrementTurn();
             }
-            game.setGamePhase(game.getGamePhase().next());
-        } else {
-            response = gamePlayEngine.processRequest(game, playerInput, clientDraft, emitter);
-            game.incrementTurn();
+        } catch (Exception e) {
+            Log.errorf(e, "Game engine error: %s", e.getMessage());
+            return GameResponse.error(
+                    "The GM lost their train of thought. Please try again or rephrase your action.");
         }
 
         gameRepository.saveGame(game);
@@ -150,6 +163,17 @@ public class GameEngine {
             return PlayerActor.Templates.playerActorSummary(pa).render();
         }
         return Actor.Templates.actorSummary(member).render();
+    }
+
+    /**
+     * Save each PlayerActor as a "character" checkpoint using the detail template.
+     */
+    private void saveCharacterCheckpoints(GameState game) {
+        List<PlayerActor> actors = gameRepository.listPlayerActors(game.getGameId());
+        for (PlayerActor actor : actors) {
+            String detail = PlayerActor.Templates.playerActorDetail(actor).render();
+            gameRepository.saveCheckpoint(game.getGameId(), "character", detail, game.getTurnNumber());
+        }
     }
 
     /**

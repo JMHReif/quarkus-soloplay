@@ -3,15 +3,16 @@
 Adventure: {adventureName}
 {/if}
 
-Player-controlled characters:
+=== PLAYER CHARACTERS ===
 {theParty}
 
 Current Location: {locationName}
-{#if event}
+{#if adventureContext}
 
-Previously:
+=== ADVENTURE SEGMENTS ===
+{adventureContext}
 
-{event.render()}
+Follow the CURRENT SEGMENT. Steer toward the NEXT SEGMENT. Set "segmentComplete" to true when the current segment is covered.
 {/if}
 
 Player says:

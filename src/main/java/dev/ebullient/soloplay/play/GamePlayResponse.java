@@ -23,5 +23,11 @@ public record GamePlayResponse(
 
         @Description("names of location(s) relevant to the scene") List<String> locationsPresent,
 
-        @Description("list of lore document filenames used. If you did not use lore docs or tools, sources = []. Don't invent filenames.") List<String> sources) {
+        @Description("list of lore document filenames used. If you did not use lore docs or tools, sources = []. Don't invent filenames.") List<String> sources,
+
+        @Description("Set to true when you have covered the content of the current adventure segment and are ready to move on. null or false means you are still working within the current segment.") Boolean segmentComplete,
+
+        @Description("If the player makes a major decision that deviates from the written adventure, describe the deviation briefly. null means no deviation.") String majorDecision,
+
+        @Description("A concise note about a key moment worth remembering (character revelation, major plot twist, important discovery). null means nothing noteworthy to checkpoint.") String checkpoint) {
 }

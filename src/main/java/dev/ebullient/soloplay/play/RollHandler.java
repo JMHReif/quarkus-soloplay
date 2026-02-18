@@ -2,6 +2,7 @@ package dev.ebullient.soloplay.play;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -10,7 +11,9 @@ import java.util.stream.IntStream;
 
 import jakarta.enterprise.context.ApplicationScoped;
 
+import dev.ebullient.soloplay.play.GameEffect.HtmlFragment;
 import dev.ebullient.soloplay.play.GameEffect.StatefulEffect;
+import dev.ebullient.soloplay.play.model.GameState;
 import dev.ebullient.soloplay.play.model.PendingRoll;
 import dev.ebullient.soloplay.play.model.PendingRollStash;
 import dev.ebullient.soloplay.play.model.RollResult;
@@ -142,5 +145,40 @@ public class RollHandler {
      */
     public boolean isRollInput(String input) {
         return input.startsWith("/roll") || input.matches("\\d+");
+    }
+
+    /**
+     * Get the pending roll from GameState stash.
+     */
+    public PendingRoll getPendingRoll(GameState game) {
+        PendingRollStash prs = game.getStash(SLOT, PendingRollStash.class);
+        return prs != null ? prs.toPendingRoll() : null;
+    }
+
+    /**
+     * Clear the pending roll from GameState stash.
+     */
+    public void clearPendingRoll(GameState game) {
+        game.removeStash(SLOT);
+    }
+
+    /**
+     * Store a pending roll in GameState stash and return an HtmlFragment effect.
+     */
+    public Optional<HtmlFragment> setPendingRoll(GameState game, PendingRoll roll) {
+        if (roll == null) {
+            return Optional.empty();
+        }
+        PendingRollStash stash = PendingRollStash.from(roll);
+        game.putStash(SLOT, stash);
+        return Optional.of(new HtmlFragment(SLOT, roll.render()));
+    }
+
+    /**
+     * Handle a roll command using GameState-stored pending roll.
+     */
+    public RollResult handleRollCommand(GameState game, String trimmed) {
+        PendingRollStash prs = game.getStash(SLOT, PendingRollStash.class);
+        return handleRollCommand(prs, trimmed);
     }
 }

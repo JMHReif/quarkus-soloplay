@@ -7,31 +7,15 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import dev.ebullient.soloplay.GameRepository;
-<<<<<<< Updated upstream
-import dev.ebullient.soloplay.StringUtils;
-import dev.ebullient.soloplay.play.GameEffect.StatefulEffect;
-=======
->>>>>>> Stashed changes
 import dev.ebullient.soloplay.play.model.GameState;
 import dev.ebullient.soloplay.play.model.GameState.CharacterCreationStage;
 import dev.ebullient.soloplay.play.model.GameState.GamePhase;
 import dev.ebullient.soloplay.play.model.PlayerActor;
-<<<<<<< Updated upstream
-import dev.ebullient.soloplay.play.model.PlayerActorCreationPatch;
-import dev.ebullient.soloplay.play.model.PlayerActorDraft;
-import dev.ebullient.soloplay.play.model.Stash;
-
-@ApplicationScoped
-public class ActorCreationEngine {
-    public static final String SLOT = "actor_draft";
-    static final PlayerActorDraft EMPTY_DRAFT = new PlayerActorDraft(null, null, null, null, null, null, null, false);
-=======
 import io.quarkus.logging.Log;
 
 @ApplicationScoped
 public class ActorCreationEngine {
     static final String CURRENT_ACTOR_KEY = "current_actor_id";
->>>>>>> Stashed changes
 
     @Inject
     GameRepository gameRepository;
@@ -39,14 +23,7 @@ public class ActorCreationEngine {
     @Inject
     ActorCreationAssistant assistant;
 
-<<<<<<< Updated upstream
-    @Inject
-    ObjectMapper objectMapper;
-
-    public GameResponse processRequest(GameState game, String playerInput, Stash clientDraft, GameEventEmitter emitter) {
-=======
     public GameResponse processRequest(GameState game, String playerInput, GameEventEmitter emitter) {
->>>>>>> Stashed changes
         Objects.requireNonNull(game, "game");
         Objects.requireNonNull(emitter, "emitter");
 
@@ -58,42 +35,6 @@ public class ActorCreationEngine {
         if (isHelpCommand(trimmed)) {
             return help(game);
         }
-<<<<<<< Updated upstream
-
-        // Use client-provided draft or fall back to empty
-        var currentDraft = (clientDraft instanceof PlayerActorDraft pad) ? pad : EMPTY_DRAFT;
-        if ("/cancel".equalsIgnoreCase(trimmed)) {
-            return cancelDraft(game);
-        }
-        if ("/reset".equalsIgnoreCase(trimmed)) {
-            return resetDraft();
-        }
-        if ("/confirm".equalsIgnoreCase(trimmed)) {
-            return saveDraft(game, currentDraft, emitter);
-        }
-        emitter.assistantDelta("The GM is thinking…\n");
-
-        try {
-            ActorCreationResponse response = handleAssistantResponse(game, currentDraft, trimmed);
-
-            // All is well with parsed response
-            var message = response.message();
-            var patch = response.patch();
-
-            emitter.assistantDelta("Updating your character…\n");
-            PlayerActorDraft updatedDraft = applyPatch(currentDraft, patch);
-
-            return GameResponse.reply(
-                    (message == null ? "ok." : message) + "\n\n"
-                            + "\n\nUse `/confirm` when your character is ready.",
-                    draftEffect(updatedDraft));
-        } catch (Exception e) {
-            String message = e.getMessage();
-            if (message == null) {
-                message = e.toString();
-            }
-            return GameResponse.error("Unable to get a response from the GM: " + message);
-=======
         if ("/cancel".equalsIgnoreCase(trimmed)) {
             return cancelCreation(game);
         }
@@ -105,7 +46,6 @@ public class ActorCreationEngine {
         }
         if ("/back".equalsIgnoreCase(trimmed)) {
             return goBack(game);
->>>>>>> Stashed changes
         }
 
         CharacterCreationStage stage = game.getCharacterCreationStage();
@@ -120,62 +60,12 @@ public class ActorCreationEngine {
         return processStageInput(game, stage, trimmed, emitter);
     }
 
-<<<<<<< Updated upstream
-    private GameResponse saveDraft(GameState game,
-            PlayerActorDraft draft,
-            GameEventEmitter emitter) {
-        emitter.assistantDelta("Confirming character…\n");
-=======
     private GameResponse promptForCurrentStage(GameState game, GameEventEmitter emitter) {
         CharacterCreationStage stage = game.getCharacterCreationStage();
         PlayerActor currentActor = getCurrentActor(game);
->>>>>>> Stashed changes
 
         emitter.assistantDelta("Preparing character creation...\n");
 
-<<<<<<< Updated upstream
-        PlayerActor actor = new PlayerActor(game.getGameId(), draft);
-        emitter.assistantDelta("Saving character…\n");
-        gameRepository.saveActor(actor);
-
-        game.setGamePhase(game.getGamePhase().next());
-        // Return clear effect to remove client state
-        return GameResponse.reply("""
-                Created your character: **%s** (%s, level %s).
-
-                Use `/newcharacter` to create an additional character, or `/start` to start or resume your game.
-                """.stripIndent().formatted(actor.getName(), actor.getActorClass(), actor.getLevel()), clearDraftEffect());
-    }
-
-    private GameResponse cancelDraft(GameState game) {
-        String partyMembers = gameRepository.listPlayerActors(game.getGameId()).stream()
-                .map(pa -> "%s, %s, level %s".formatted(pa.getName(), pa.getActorClass(), pa.getLevel()))
-                .collect(Collectors.joining("; "));
-        if (!partyMembers.isBlank()) {
-            game.setGamePhase(game.getGamePhase().next());
-
-            return GameResponse.reply("""
-                    Exiting character creation.
-
-                    Current party: %s
-
-                    Use `/newcharacter` to create an additional character, or `/start` to start or resume your game.
-                    """.stripIndent().formatted(partyMembers), clearDraftEffect());
-        }
-        return GameResponse.reply("Ok. Your draft has been reset, but you still need to define a character.",
-                clearDraftEffect());
-    }
-
-    private GameResponse resetDraft() {
-        // Return clear effect to remove client state
-        return GameResponse.reply("Ok — cleared your character draft.", clearDraftEffect());
-    }
-
-    private ActorCreationResponse handleAssistantResponse(GameState game,
-            PlayerActorDraft currentDraft,
-            String playerInput) {
-=======
->>>>>>> Stashed changes
         String chatMemoryId = game.getGameId() + "-character";
 
         try {
@@ -211,6 +101,7 @@ public class ActorCreationEngine {
 
             // Apply any patch from the response
             if (response.patch() != null) {
+                Log.infof("Character patch for stage %s: %s", stage, response.patch());
                 currentActor = applyPatchAndSave(game, currentActor, response.patch());
                 emitter.assistantDelta("Saved to character sheet.\n");
 
@@ -291,7 +182,9 @@ public class ActorCreationEngine {
 
         // Save to graph
         gameRepository.saveActor(actor);
-        Log.debugf("Saved actor %s to graph", actor.getName());
+        Log.infof("Character state: name=%s, class=%s, level=%s, summary=%s, tags=%s",
+                actor.getName(), actor.getActorClass(), actor.getLevel(),
+                actor.getSummary(), actor.getTags());
 
         return actor;
     }
@@ -409,64 +302,6 @@ public class ActorCreationEngine {
         return GameResponse.reply("""
                 **Character Creation Commands**
 
-<<<<<<< Updated upstream
-                - `/confirm`: create the character (requires name, class, level)
-                - `/reset`: clear the current draft
-                - `/cancel`: exit character creation (requires at least one party member)
-                - `/help` (or `help`, `?`): show commands
-                """);
-    }
-
-    static String missingRequired(PlayerActorDraft draft) {
-        if (draft == null) {
-            return "no draft";
-        }
-        if (draft.name() == null || draft.name().isBlank()) {
-            return "missing name";
-        }
-        if (draft.actorClass() == null || draft.actorClass().isBlank()) {
-            return "missing class";
-        }
-        if (draft.level() == null || draft.level() < 1) {
-            return "missing/invalid level";
-        }
-        return null;
-    }
-
-    static PlayerActorDraft applyPatch(PlayerActorDraft current, PlayerActorCreationPatch patch) {
-        if (patch == null) {
-            return current;
-        }
-        return new PlayerActorDraft(
-                StringUtils.firstNonBlank(patch.name(), current.name()),
-                StringUtils.firstNonBlank(patch.actorClass(), current.actorClass()),
-                patch.level() != null ? patch.level() : current.level(),
-                StringUtils.firstNonBlank(patch.summary(), current.summary()),
-                StringUtils.firstNonBlank(patch.description(), current.description()),
-                patch.tags() != null ? patch.tags() : current.tags(),
-                patch.aliases() != null ? patch.aliases() : current.aliases(),
-                current.confirmed());
-    }
-
-    /**
-     * Create a StatefulEffect for an actor draft (for round-trip through client).
-     * The draft is rendered as HTML for the draft panel display.
-     */
-    static StatefulEffect draftEffect(PlayerActorDraft draft) {
-        if (draft == null) {
-            return clearDraftEffect();
-        }
-        // Render as HTML for draft panel display
-        String html = PlayerActor.Templates.playerActorDraft(draft).render();
-        return new StatefulEffect(SLOT, html, draft);
-    }
-
-    /**
-     * Create a StatefulEffect that clears the actor draft state.
-     */
-    static StatefulEffect clearDraftEffect() {
-        return StatefulEffect.clear(SLOT);
-=======
                 - Just type naturally to describe your character
                 - `/status` - Show current character progress
                 - `/back` - Go back to previous step
@@ -475,13 +310,12 @@ public class ActorCreationEngine {
                 - `/newcharacter` - Start a new character
                 - `/help` - Show this help
 
-                **Current Stage:** """ + game.getCharacterCreationStage().fieldName());
+                **Current Stage:** """ + (game != null ? game.getCharacterCreationStage().fieldName() : "none"));
     }
 
     private boolean isHelpCommand(String input) {
         return input.equalsIgnoreCase("/help") ||
                 input.equalsIgnoreCase("help") ||
                 input.equals("?");
->>>>>>> Stashed changes
     }
 }
