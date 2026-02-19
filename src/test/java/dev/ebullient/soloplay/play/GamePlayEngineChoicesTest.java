@@ -43,8 +43,8 @@ class GamePlayEngineChoicesTest {
                 Mockito.anyString(),
                 Mockito.anyList(),
                 Mockito.anyString(),
-                Mockito.any(),
-                Mockito.anyString()))
+                Mockito.anyString(),
+                Mockito.any()))
                 .thenReturn(new GamePlayResponse(
                         "narration",
                         "summary",
@@ -54,9 +54,12 @@ class GamePlayEngineChoicesTest {
                         "Somewhere",
                         List.of(),
                         List.of(),
-                        List.of()));
+                        List.of(),
+                        null,
+                        null,
+                        null));
 
-        GameResponse response = engine.processRequest(game, "hello", null, text -> {
+        GameResponse response = engine.processRequest(game, "hello", text -> {
         });
         assertTrue(response instanceof GameResponse.Reply);
 

@@ -88,6 +88,17 @@ public class Neo4jChatMemoryStore implements ChatMemoryStore {
                         "id", id,
                         "messagesJson", messagesJson,
                         "updatedAt", now.toString()));
+
+        // Link ChatMemory to its Game via HAS_MEMORY relationship.
+        // memoryId is either "gameId" or "gameId-character" — strip suffix to get gameId.
+        String gameId = id.endsWith("-character") ? id.substring(0, id.length() - "-character".length()) : id;
+        session.query(
+                """
+                        MATCH (g:Game {gameId: $gameId})
+                        MATCH (m:ChatMemory {id: $id})
+                        MERGE (g)-[:HAS_MEMORY]->(m)
+                        """,
+                Map.of("gameId", gameId, "id", id));
     }
 
     /**
@@ -146,7 +157,7 @@ public class Neo4jChatMemoryStore implements ChatMemoryStore {
 
         Session session = sessionFactory.openSession();
         session.query(
-                "MATCH (m:ChatMemory {id: $id}) DELETE m",
+                "MATCH (m:ChatMemory {id: $id}) DETACH DELETE m",
                 Map.of("id", id));
     }
 }

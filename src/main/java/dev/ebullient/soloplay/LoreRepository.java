@@ -49,30 +49,8 @@ public class LoreRepository {
     public String getDocumentByFilename(String filename) {
         var session = sessionFactory.openSession();
         try {
-            // Prefer a single :File node (one resource per node).
-            String fileCypher = """
-                    MATCH (n:File)
-                    WHERE n.filename = $filename
-                       OR n.filename = $filenameWithMd
-                       OR n.filename = $filenameWithoutMd
-                    RETURN n.text as text
-                    LIMIT 1
-                    """;
-
             String filenameWithMd = filename.endsWith(".md") ? filename : filename + ".md";
             String filenameWithoutMd = filename.endsWith(".md") ? filename.substring(0, filename.length() - 3) : filename;
-
-            Iterable<Map<String, Object>> fileResults = session.query(fileCypher, Map.of(
-                    "filename", filename,
-                    "filenameWithMd", filenameWithMd,
-                    "filenameWithoutMd", filenameWithoutMd));
-
-            for (Map<String, Object> row : fileResults) {
-                String text = (String) row.get("text");
-                if (text != null && !text.isBlank()) {
-                    return text;
-                }
-            }
 
             // Try exact match first, then with/without .md extension
             String cypher = """

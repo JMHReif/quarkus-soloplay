@@ -3,15 +3,16 @@
 Adventure: {adventureName}
 {/if}
 
-Player-controlled characters:
+=== PLAYER CHARACTERS ===
 {theParty}
 
 Current Location: {locationName}
-{#if event}
+{#if adventureContext}
 
-Previously:
+=== ADVENTURE SEGMENTS ===
+{adventureContext}
 
-{event.render()}
+Use the adventure segments to inform the roll outcome. Steer toward the NEXT SEGMENT.
 {/if}
 
 The player rolled for: {rollResult.context}

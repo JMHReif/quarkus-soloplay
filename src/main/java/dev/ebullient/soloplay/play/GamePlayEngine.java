@@ -2,6 +2,7 @@ package dev.ebullient.soloplay.play;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -11,23 +12,21 @@ import jakarta.inject.Inject;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import dev.ebullient.soloplay.GameRepository;
-import dev.ebullient.soloplay.play.GameEffect.StatefulEffect;
+import dev.ebullient.soloplay.play.GameEffect.HtmlFragment;
 import dev.ebullient.soloplay.play.model.Actor;
 import dev.ebullient.soloplay.play.model.BaseEntity;
 import dev.ebullient.soloplay.play.model.Event;
 import dev.ebullient.soloplay.play.model.GameState;
 import dev.ebullient.soloplay.play.model.Location;
 import dev.ebullient.soloplay.play.model.Patch;
-import dev.ebullient.soloplay.play.model.PendingRollStash;
+import dev.ebullient.soloplay.play.model.PendingRoll;
 import dev.ebullient.soloplay.play.model.PlayerActor;
 import dev.ebullient.soloplay.play.model.PlayerChoices;
 import dev.ebullient.soloplay.play.model.RollResult;
-import dev.ebullient.soloplay.play.model.Stash;
 import io.quarkus.logging.Log;
 
 @ApplicationScoped
 public class GamePlayEngine {
-    static final String EVENT_STASH = "prev_event";
 
     @Inject
     GameRepository gameRepository;
@@ -44,88 +43,123 @@ public class GamePlayEngine {
     public GameResponse sceneStart(GameState game, GameEventEmitter emitter) {
         emitter.assistantDelta("Setting the scene…\n");
 
-        var response = assistant.sceneStart(
-                game.getGameId(),
-                game.getAdventureName(),
-                listTheParty(game));
+        try {
+            // Initialize adventure segment tracking if this game has an adventure
+            String adventureContext = null;
+            if (game.getAdventureName() != null) {
+                Log.infof("sceneStart: adventure=%s, looking for first segment", game.getAdventureName());
+                var firstSegment = gameRepository.findFirstAdventureSegment(game.getAdventureName());
+                if (firstSegment != null) {
+                    String docId = (String) firstSegment.get("id");
+                    Log.infof("sceneStart: found first segment docId=%s", docId);
+                    gameRepository.initCurrentStep(game.getGameId(), docId);
+                    adventureContext = fetchAdventureContext(game);
+                    Log.infof("sceneStart: adventureContext length=%d",
+                            adventureContext != null ? adventureContext.length() : 0);
+                } else {
+                    Log.warnf("sceneStart: no adventure segments found for '%s'", game.getAdventureName());
+                }
+            } else {
+                Log.infof("sceneStart: no adventure set (sandbox mode)");
+            }
 
-        return processResponse(game, response, emitter);
+            var response = assistant.sceneStart(
+                    game.getGameId(),
+                    game.getAdventureName(),
+                    listTheParty(game),
+                    adventureContext,
+                    formatJournal(game));
+
+            return processResponse(game, response, emitter);
+        } catch (Exception e) {
+            return handleAssistantError(e);
+        }
     }
 
     public GameResponse recap(GameState game, String recentEvents, GameEventEmitter emitter) {
         emitter.assistantDelta("Recapping the story…\n");
 
-        var response = assistant.recap(
-                game.getGameId(),
-                game.getAdventureName(),
-                listTheParty(game),
-                game.getCurrentLocation(),
-                recentEvents);
+        try {
+            String adventureContext = fetchAdventureContext(game);
 
-        return processResponse(game, response, emitter);
+            var response = assistant.recap(
+                    game.getGameId(),
+                    game.getAdventureName(),
+                    listTheParty(game),
+                    formatLocationContext(game),
+                    recentEvents,
+                    adventureContext,
+                    formatJournal(game));
+
+            return processResponse(game, response, emitter);
+        } catch (Exception e) {
+            return handleAssistantError(e);
+        }
     }
 
-    /**
-     * Process a player request using client-provided stash for stateless operation.
-     *
-     * @param game The game state
-     * @param playerInput The player's input
-     * @param clientStash The stash round-tripped from the client (may be PendingRoll, etc.)
-     * @param emitter Event emitter for streaming responses
-     * @return The game response with effects (including any new StatefulEffect for round-trip)
-     */
-    public GameResponse processRequest(GameState game, String playerInput, Stash clientStash,
-            GameEventEmitter emitter) {
+    public GameResponse processRequest(GameState game, String playerInput, GameEventEmitter emitter) {
         Objects.requireNonNull(game, "game");
         Objects.requireNonNull(emitter, "emitter");
 
         String trimmed = playerInput == null ? "" : playerInput.trim();
 
-        // Check for pending roll resolution (from client-provided stash)
-        if (clientStash instanceof PendingRollStash pendingRollStash && rollHandler.isRollInput(trimmed)) {
-            return resolveRoll(game, pendingRollStash, trimmed, emitter);
-        }
+        try {
+            // Check for pending roll resolution
+            PendingRoll pendingRoll = rollHandler.getPendingRoll(game);
+            if (pendingRoll != null && isRollInput(trimmed)) {
+                return resolveRoll(game, pendingRoll, trimmed, emitter);
+            }
 
-        // Standard turn
-        return handleTurn(game, trimmed, emitter);
+            // Standard turn
+            return handleTurn(game, trimmed, emitter);
+        } catch (Exception e) {
+            return handleAssistantError(e);
+        }
     }
 
     private GameResponse handleTurn(GameState game, String playerInput, GameEventEmitter emitter) {
         emitter.assistantDelta("The GM is thinking…\n");
 
-        // TODO: gather context for the turn
+        String adventureContext = fetchAdventureContext(game);
+        Log.debugf("handleTurn: adventureContext=%s",
+                adventureContext != null ? "present (" + adventureContext.length() + " chars)" : "null");
+
         var response = assistant.turn(
                 game.getGameId(),
                 game.getAdventureName(),
                 listTheParty(game),
-                game.getCurrentLocation(),
-                game.getStash(EVENT_STASH, Event.class),
-                playerInput);
+                formatLocationContext(game),
+                playerInput,
+                adventureContext);
 
         return processResponse(game, response, emitter);
     }
 
-    private GameResponse resolveRoll(GameState game, PendingRollStash pendingStash, String rollInput,
+    private GameResponse resolveRoll(GameState game, PendingRoll pending, String rollInput,
             GameEventEmitter emitter) {
         emitter.assistantDelta("Processing roll…\n");
 
-        RollResult rollResult = rollHandler.handleRollCommand(pendingStash, rollInput);
+        RollResult rollResult = rollHandler.handleRollCommand(game, rollInput);
         if (rollResult == null) {
             return GameResponse.error("Could not parse roll input: " + rollInput);
         }
 
-        // Roll is resolved - clear the pending roll by sending a clear effect
-        var clearEffect = rollHandler.clearPendingRollEffect();
+        rollHandler.clearPendingRoll(game);
+
+        // Send the roll result to chat immediately so player sees their roll
+        var rollResultEffect = new GameEffect.HtmlFragment("roll_result", rollResult.render());
+
+        String adventureContext = fetchAdventureContext(game);
 
         var response = assistant.resolveRoll(
                 game.getGameId(),
                 game.getAdventureName(),
                 listTheParty(game),
-                game.getCurrentLocation(),
-                game.getStash(EVENT_STASH, Event.class),
-                rollResult);
+                formatLocationContext(game),
+                rollResult,
+                adventureContext);
 
-        return processResponse(game, response, emitter, clearEffect);
+        return processResponse(game, response, emitter, rollResultEffect);
     }
 
     private GameResponse processResponse(GameState game, GamePlayResponse response, GameEventEmitter emitter) {
@@ -133,35 +167,134 @@ public class GamePlayEngine {
     }
 
     private GameResponse processResponse(GameState game, GamePlayResponse response, GameEventEmitter emitter,
-            StatefulEffect additionalEffect) {
+            GameEffect additionalEffect) {
         if (response == null || response.narration() == null) {
             return GameResponse.error("No response from GM");
         }
 
         game.setCurrentLocation(response.currentLocation());
+        game.setLastNarration(response.narration());
+
+        // Handle adventure segment progression
+        if (Boolean.TRUE.equals(response.segmentComplete())) {
+            gameRepository.advanceAdventureSegment(game.getGameId(), game.getTurnNumber());
+        }
+        if (response.majorDecision() != null && !response.majorDecision().isBlank()) {
+            gameRepository.recordDecision(game.getGameId(), game.getTurnNumber(), response.majorDecision());
+        }
+
+        // Save checkpoint if the LLM flagged a key moment
+        if (response.checkpoint() != null && !response.checkpoint().isBlank()) {
+            gameRepository.saveCheckpoint(game.getGameId(), "milestone", response.checkpoint(), game.getTurnNumber());
+        }
 
         // Apply patches (actors, locations, plot flags)
         emitter.assistantDelta("Updating world state…\n");
         patchesAndEvents(game, response);
 
-        // Create pending roll effect if present (for round-trip through client)
-        var pendingRollEffect = rollHandler.createPendingRollEffect(response.pendingRoll());
+        // Store pending roll if present
+        emitter.assistantDelta("Checking for pending roll…\n");
+        var pendingRollEffect = storePendingRoll(game, response.pendingRoll());
 
-        // Build response with effects
-        var reply = GameResponse.reply(response.narration());
-
+        // Collect all effects
+        java.util.List<GameEffect> effects = new java.util.ArrayList<>();
+        if (additionalEffect != null) {
+            effects.add(additionalEffect);
+        }
         if (pendingRollEffect != null) {
-            reply = reply.withEffects(pendingRollEffect);
+            effects.add(pendingRollEffect);
         }
         if (response.playerChoices() != null && !response.playerChoices().isEmpty()) {
             String html = new PlayerChoices(response.playerChoices()).render();
-            reply = reply.withEffects(new GameEffect.HtmlFragment("player_choices", html));
-        }
-        if (additionalEffect != null) {
-            reply = reply.withEffects(additionalEffect);
+            effects.add(new GameEffect.HtmlFragment("player_choices", html));
         }
 
-        return reply;
+        return effects.isEmpty()
+                ? GameResponse.reply(response.narration())
+                : GameResponse.reply(response.narration(), effects.toArray(new GameEffect[0]));
+    }
+
+    private GameResponse handleAssistantError(Exception e) {
+        Log.errorf(e, "Assistant call failed: %s", e.getMessage());
+        return GameResponse.error(
+                "The GM lost their train of thought. Please try again or rephrase your action.");
+    }
+
+    private HtmlFragment storePendingRoll(GameState game, PendingRoll roll) {
+        return rollHandler.setPendingRoll(game, roll)
+                .orElse(null);
+    }
+
+    private boolean isRollInput(String input) {
+        // e.g., "/roll", "1d20+5", "15", etc.
+        return input.startsWith("/roll") || input.matches("\\d+");
+    }
+
+    /**
+     * Load non-character checkpoints for a game and format as campaign notes.
+     * Character details are already in the party list — only milestones go here.
+     * Returns null if there are no notes.
+     */
+    String formatJournal(GameState game) {
+        var checkpoints = gameRepository.getCheckpoints(game.getGameId());
+        if (checkpoints.isEmpty()) {
+            return null;
+        }
+
+        StringBuilder notes = new StringBuilder();
+        for (var cp : checkpoints) {
+            String category = (String) cp.get("category");
+            if ("character".equals(category)) {
+                continue; // character details are in the party list
+            }
+            String content = (String) cp.get("content");
+            notes.append("- ").append(content).append("\n");
+        }
+
+        return notes.isEmpty() ? null : notes.toString().trim();
+    }
+
+    /**
+     * Fetch adventure context from the current GameSegment's linked Document.
+     * Returns formatted current segment + next segment so the LLM can steer the story.
+     */
+    String fetchAdventureContext(GameState game) {
+        Map<String, Object> ctx = gameRepository.getCurrentAdventureContext(game.getGameId());
+        if (ctx == null || ctx.get("currentText") == null) {
+            Log.debugf("fetchAdventureContext: no context found for game %s (ctx=%s)",
+                    game.getGameId(), ctx == null ? "null" : "missing currentText");
+            return null;
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("--- CURRENT SEGMENT (play this now) ---\n");
+        if (ctx.get("chapterName") != null) {
+            sb.append("Chapter: ").append(ctx.get("chapterName")).append("\n");
+        }
+        if (ctx.get("section") != null) {
+            sb.append("Section: ").append(ctx.get("section")).append("\n");
+        }
+        sb.append("\n").append(ctx.get("currentText"));
+
+        if (ctx.get("nextText") != null) {
+            sb.append("\n\n--- NEXT SEGMENT (steer the story toward this) ---\n");
+            if (ctx.get("nextChapterName") != null) {
+                sb.append("Chapter: ").append(ctx.get("nextChapterName")).append("\n");
+            }
+            if (ctx.get("nextSection") != null) {
+                sb.append("Section: ").append(ctx.get("nextSection")).append("\n");
+            }
+            // Cap next segment to avoid overflowing the model's context window
+            String nextText = ctx.get("nextText").toString();
+            if (nextText.length() > 600) {
+                nextText = nextText.substring(0, 600) + "…";
+            }
+            sb.append("\n").append(nextText);
+        } else {
+            sb.append("\n\n[This is the final segment of the adventure.]");
+        }
+
+        return sb.toString();
     }
 
     private void patchesAndEvents(GameState game, GamePlayResponse response) {
@@ -171,10 +304,6 @@ public class GamePlayEngine {
 
         if (response.patches() != null) {
             for (Patch patch : response.patches()) {
-                if (patch.type() == null) {
-                    Log.warnf("Skipping patch with null type: %s", patch);
-                    continue;
-                }
                 switch (patch.type()) {
                     case "actor" -> {
                         var merged = handleActor(game, patch);
@@ -211,13 +340,13 @@ public class GamePlayEngine {
             event.addParticipants(actors);
             event.addLocations(locations);
             modified.add(event);
-            game.putStash(EVENT_STASH, event);
         }
 
         modified.addAll(actors);
         modified.addAll(locations);
 
         gameRepository.saveAll(modified); // single TX
+        gameRepository.linkEntitiesToGame(game.getGameId(), modified);
     }
 
     Actor handleActor(GameState game, Patch p) {
@@ -248,23 +377,21 @@ public class GamePlayEngine {
     }
 
     private String formatPartyMember(Actor actor) {
-        StringBuilder sb = new StringBuilder();
-        sb.append(actor.getName());
-
         if (actor instanceof PlayerActor pa) {
-            if (pa.getActorClass() != null) {
-                sb.append(" (");
-                if (pa.getLevel() != null) {
-                    sb.append("Level ").append(pa.getLevel()).append(" ");
-                }
-                sb.append(pa.getActorClass()).append(")");
-            }
+            return PlayerActor.Templates.playerActorSummary(pa).render();
         }
+        return Actor.Templates.actorSummary(actor).render();
+    }
 
-        if (actor.getSummary() != null && !actor.getSummary().isBlank()) {
-            sb.append(": ").append(actor.getSummary());
+    private String formatLocationContext(GameState game) {
+        String locName = game.getCurrentLocation();
+        if (locName == null || locName.isBlank()) {
+            return "Unknown";
         }
-
-        return sb.toString();
+        Location loc = gameRepository.findLocationByNameOrAlias(game.getGameId(), locName);
+        if (loc != null && loc.getSummary() != null && !loc.getSummary().isBlank()) {
+            return locName + " -- " + loc.getSummary();
+        }
+        return locName;
     }
 }

@@ -30,9 +30,17 @@ public class GamePlayResponseGuardrail implements OutputGuardrail {
     public OutputGuardrailResult validate(AiMessage responseFromLLM) {
         try {
             Log.debugf("AiMessage: %s", objectMapper.writeValueAsString(responseFromLLM));
+            if (responseFromLLM.text() == null || responseFromLLM.text().isBlank()) {
+                return reprompt("No text in response", REPROMPT_PROMPT);
+            }
             GamePlayResponse response = objectMapper.readValue(responseFromLLM.text(), GamePlayResponse.class);
             if (response.narration() == null) {
                 return reprompt("Missing narration", REPROMPT_PROMPT);
+            }
+            if (containsFieldLabels(response.narration())) {
+                return reprompt(
+                        "The narration field must contain ONLY story prose. Do not include field labels like 'Turn Summary:', 'PendingRoll:', 'PlayerChoices:', or 'Patches:' inside the narration. Those belong in their own JSON fields.",
+                        REPROMPT_PROMPT);
             }
             if (response.pendingRoll() != null && response.playerChoices() != null && !response.playerChoices().isEmpty()) {
                 // The LLM violated the constraint - force correction
@@ -51,5 +59,12 @@ public class GamePlayResponseGuardrail implements OutputGuardrail {
         } catch (JsonProcessingException e) {
             return reprompt(REPROMPT_MESSAGE, e, REPROMPT_PROMPT);
         }
+    }
+
+    private static final java.util.regex.Pattern FIELD_LABEL_PATTERN = java.util.regex.Pattern.compile(
+            "(?i)(Turn Summary|PendingRoll|PlayerChoices|Patches|segmentComplete|majorDecision)\\s*:");
+
+    private boolean containsFieldLabels(String narration) {
+        return FIELD_LABEL_PATTERN.matcher(narration).find();
     }
 }

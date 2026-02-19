@@ -5,12 +5,24 @@ Adventure: {adventureName}
 
 === PLAYER CHARACTERS ===
 {theParty}
+{#if gameJournal}
+
+=== CAMPAIGN NOTES (your persistent memory) ===
+{gameJournal}
+{/if}
 
 === CURRENT LOCATION ===
 {locationName}
 
 === RECENT EVENTS ===
 {recentEvents}
+{#if adventureContext}
+
+=== CURRENT ADVENTURE SEGMENT ===
+{adventureContext}
+
+Use the adventure segment above to orient the recap and guide the next steps.
+{/if}
 
 Welcome the player back. Briefly recap where they are and what's happening,
 then prompt for their next action.

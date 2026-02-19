@@ -1,7 +1,24 @@
 === PLAYER CHARACTERS ===
 {theParty}
+{#if gameJournal}
 
-{#if adventureName}
+=== CAMPAIGN NOTES (your persistent memory) ===
+{gameJournal}
+{/if}
+
+{#if adventureContext}
+=== ADVENTURE MODE (guided) ===
+
+Adventure: {adventureName}
+
+=== ADVENTURE SEGMENTS ===
+{adventureContext}
+
+Use the CURRENT SEGMENT to set the opening scene.
+Establish the atmosphere, introduce key NPCs, and present the adventure's initial hook
+as described in the segment text above. Steer toward the NEXT SEGMENT.
+Do not rush — pace each segment across multiple turns.
+{#else if adventureName}
 === ADVENTURE MODE ===
 
 Adventure: {adventureName}

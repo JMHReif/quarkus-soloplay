@@ -78,20 +78,29 @@ public class GameRepository {
     public void deleteGame(String gameId) {
         var session = sessionFactory.openSession();
         try (Transaction tx = session.beginTransaction()) {
-            // Delete all nodes related to this game
-            String cypher = """
+            // Delete all relationship-linked entities (actors, events, locations, segments, chat memory)
+            String relCypher = """
+                    MATCH (g:Game {gameId: $gameId})
+                    OPTIONAL MATCH (g)-[r]->(n)
+                    WHERE NOT n:Document
+                    DETACH DELETE n
+                    WITH g
+                    DETACH DELETE g
+                    """;
+            session.query(relCypher, Map.of("gameId", gameId));
+
+            // Belt-and-suspenders: clean up any orphaned nodes with matching gameId
+            String fallbackCypher = """
                     MATCH (n {gameId: $gameId})
                     DETACH DELETE n
                     """;
-            session.query(cypher, Map.of("gameId", gameId));
+            session.query(fallbackCypher, Map.of("gameId", gameId));
 
-            // Also delete chat memory for this game.
-            // - Gameplay memoryId: gameId
-            // - Character creation memoryId: gameId + "-character"
+            // Clean up chat memory that may not have a gameId property
             String memoryCypher = """
                     MATCH (m:ChatMemory)
                     WHERE m.id IN [$gameId, $characterMemoryId]
-                    DELETE m
+                    DETACH DELETE m
                     """;
             session.query(memoryCypher, Map.of(
                     "gameId", gameId,
@@ -179,6 +188,14 @@ public class GameRepository {
         var session = sessionFactory.openSession();
         try (Transaction tx = session.beginTransaction()) {
             session.save(actor);
+            // Link actor to its game via HAS_ACTOR relationship
+            String cypher = """
+                    MATCH (g:Game {gameId: $gameId})
+                    MATCH (a {id: $entityId})
+                    WHERE a:Actor OR a:PlayerActor
+                    MERGE (g)-[:HAS_ACTOR]->(a)
+                    """;
+            session.query(cypher, Map.of("gameId", actor.getGameId(), "entityId", actor.getId()));
             tx.commit();
             actor.markClean();
         }
@@ -283,6 +300,216 @@ public class GameRepository {
         return events;
     }
 
+    // ========= ADVENTURE SEGMENTS ===============
+
+    /**
+     * Find the first Adventure Document node by sequenceNumber.
+     * Returns a map with "id" and "text" keys, or null if not found.
+     */
+    public Map<String, Object> findFirstAdventureSegment(String adventureName) {
+        var session = sessionFactory.openSession();
+        String cypher = """
+                MATCH (d:Document:Adventure {adventureName: $adventureName})
+                RETURN d.id AS id, d.text AS text
+                ORDER BY d.sequenceNumber ASC
+                LIMIT 1
+                """;
+        var result = session.query(cypher, Map.of("adventureName", adventureName));
+        var it = result.iterator();
+        return it.hasNext() ? it.next() : null;
+    }
+
+    /**
+     * Create a GameSegment node and link it to the Game via CURRENT_STEP.
+     * Removes any existing CURRENT_STEP relationship first (idempotent).
+     */
+    public void initCurrentStep(String gameId, String documentId) {
+        var session = sessionFactory.openSession();
+        try (Transaction tx = session.beginTransaction()) {
+            String cypher = """
+                    MATCH (g:Game {gameId: $gameId})
+                    OPTIONAL MATCH (g)-[old:CURRENT_STEP]->()
+                    DELETE old
+                    WITH g
+                    CREATE (gs:GameSegment {
+                        id: $segmentId,
+                        gameId: $gameId,
+                        documentId: $documentId,
+                        status: 'current',
+                        createdAt: $now
+                    })
+                    CREATE (g)-[:CURRENT_STEP]->(gs)
+                    """;
+            session.query(cypher, Map.of(
+                    "gameId", gameId,
+                    "segmentId", gameId + ":segment-1",
+                    "documentId", documentId,
+                    "now", System.currentTimeMillis()));
+            tx.commit();
+        }
+    }
+
+    /**
+     * Get adventure context by joining GameSegment.documentId to Document.
+     * Returns current segment text/metadata and full next segment text/metadata.
+     */
+    public Map<String, Object> getCurrentAdventureContext(String gameId) {
+        var session = sessionFactory.openSession();
+        String cypher = """
+                MATCH (g:Game {gameId: $gameId})-[:CURRENT_STEP]->(gs:GameSegment)
+                MATCH (d:Document {id: gs.documentId})
+                OPTIONAL MATCH (d)-[:NEXT]->(nextDoc:Document)
+                RETURN d.text AS currentText, d.chapterName AS chapterName,
+                       d.section AS section,
+                       nextDoc.text AS nextText, nextDoc.chapterName AS nextChapterName,
+                       nextDoc.section AS nextSection
+                """;
+        var result = session.query(cypher, Map.of("gameId", gameId));
+        var it = result.iterator();
+        return it.hasNext() ? it.next() : null;
+    }
+
+    /**
+     * Advance to the next adventure segment. Marks the old GameSegment as completed,
+     * creates a new GameSegment for the next Document (via NEXT chain).
+     * Returns false if there is no next Document.
+     */
+    public boolean advanceAdventureSegment(String gameId, int turnNumber) {
+        var session = sessionFactory.openSession();
+
+        // First check if there's a next document
+        String checkCypher = """
+                MATCH (g:Game {gameId: $gameId})-[:CURRENT_STEP]->(gs:GameSegment)
+                MATCH (d:Document {id: gs.documentId})-[:NEXT]->(nextDoc:Document)
+                RETURN nextDoc.id AS nextDocId, gs.id AS oldSegmentId
+                """;
+        var result = session.query(checkCypher, Map.of("gameId", gameId));
+        var it = result.iterator();
+        if (!it.hasNext()) {
+            return false;
+        }
+        var row = it.next();
+        String nextDocId = (String) row.get("nextDocId");
+
+        // Advance in a transaction
+        try (Transaction tx = session.beginTransaction()) {
+            String cypher = """
+                    MATCH (g:Game {gameId: $gameId})-[rel:CURRENT_STEP]->(oldGs:GameSegment)
+                    SET oldGs.status = 'completed', oldGs.turnNumber = $turnNumber, oldGs.completedAt = $now
+                    DELETE rel
+                    CREATE (g)-[:COMPLETED_STEP]->(oldGs)
+                    CREATE (newGs:GameSegment {
+                        id: $segmentId,
+                        gameId: $gameId,
+                        documentId: $nextDocId,
+                        status: 'current',
+                        createdAt: $now
+                    })
+                    CREATE (g)-[:CURRENT_STEP]->(newGs)
+                    """;
+            session.query(cypher, Map.of(
+                    "gameId", gameId,
+                    "turnNumber", turnNumber,
+                    "now", System.currentTimeMillis(),
+                    "segmentId", gameId + ":segment-" + (turnNumber + 1),
+                    "nextDocId", nextDocId));
+            tx.commit();
+        }
+        return true;
+    }
+
+    /**
+     * Record a player decision that deviates from the written adventure.
+     */
+    public void recordDecision(String gameId, int turnNumber, String summary) {
+        var session = sessionFactory.openSession();
+        try (Transaction tx = session.beginTransaction()) {
+            String cypher = """
+                    MATCH (g:Game {gameId: $gameId})-[:CURRENT_STEP]->(gs:GameSegment)
+                    CREATE (dec:GameSegment {
+                        id: $segmentId,
+                        gameId: $gameId,
+                        documentId: gs.documentId,
+                        status: 'decision',
+                        turnNumber: $turnNumber,
+                        summary: $summary,
+                        createdAt: $now
+                    })
+                    CREATE (g)-[:DECISION]->(dec)
+                    """;
+            session.query(cypher, Map.of(
+                    "gameId", gameId,
+                    "turnNumber", turnNumber,
+                    "segmentId", gameId + ":decision-" + turnNumber,
+                    "summary", summary,
+                    "now", System.currentTimeMillis()));
+            tx.commit();
+        }
+    }
+
+    // ========= CHECKPOINTS ===============
+
+    /**
+     * Create a checkpoint GameSegment and link it to the Game via CHECKPOINT.
+     */
+    public void saveCheckpoint(String gameId, String category, String content, int turnNumber) {
+        var session = sessionFactory.openSession();
+        try (Transaction tx = session.beginTransaction()) {
+            String cypher = """
+                    MATCH (g:Game {gameId: $gameId})
+                    CREATE (gs:GameSegment {
+                        id: $segmentId,
+                        gameId: $gameId,
+                        status: 'checkpoint',
+                        category: $category,
+                        summary: $content,
+                        turnNumber: $turnNumber,
+                        createdAt: $now
+                    })
+                    CREATE (g)-[:CHECKPOINT]->(gs)
+                    """;
+            session.query(cypher, Map.of(
+                    "gameId", gameId,
+                    "segmentId", gameId + ":checkpoint-" + category + "-" + turnNumber,
+                    "category", category,
+                    "content", content,
+                    "turnNumber", turnNumber,
+                    "now", System.currentTimeMillis()));
+            tx.commit();
+        }
+    }
+
+    /**
+     * Delete all checkpoints of a given category for a game.
+     */
+    public void clearCheckpoints(String gameId, String category) {
+        var session = sessionFactory.openSession();
+        try (Transaction tx = session.beginTransaction()) {
+            String cypher = """
+                    MATCH (g:Game {gameId: $gameId})-[r:CHECKPOINT]->(gs:GameSegment {status: 'checkpoint', category: $category})
+                    DETACH DELETE gs
+                    """;
+            session.query(cypher, Map.of("gameId", gameId, "category", category));
+            tx.commit();
+        }
+    }
+
+    /**
+     * Return all checkpoint GameSegments for a game, ordered by turnNumber.
+     */
+    public List<Map<String, Object>> getCheckpoints(String gameId) {
+        var session = sessionFactory.openSession();
+        String cypher = """
+                MATCH (g:Game {gameId: $gameId})-[:CHECKPOINT]->(gs:GameSegment {status: 'checkpoint'})
+                RETURN gs.category AS category, gs.summary AS content, gs.turnNumber AS turnNumber
+                ORDER BY gs.turnNumber
+                """;
+        var result = session.query(cypher, Map.of("gameId", gameId));
+        List<Map<String, Object>> checkpoints = new ArrayList<>();
+        result.forEach(checkpoints::add);
+        return checkpoints;
+    }
+
     public void saveAll(Collection<? extends BaseEntity> entities) {
         if (entities.isEmpty()) {
             return;
@@ -295,6 +522,74 @@ public class GameRepository {
                     session.save(entity, 1);
                     entity.markClean();
                 }
+            }
+            tx.commit();
+        }
+    }
+
+    /**
+     * Create Game→Entity relationships via Cypher for all saved entities.
+     * Actors and Locations link directly to Game (HAS_ACTOR, HAS_LOCATION).
+     * Events form a chain: Game-[:HAS_EVENT]->E1-[:NEXT_EVENT]->E2->...
+     * Uses MERGE so it's idempotent (safe to call repeatedly).
+     */
+    public void linkEntitiesToGame(String gameId, Collection<? extends BaseEntity> entities) {
+        if (entities.isEmpty()) {
+            return;
+        }
+
+        // Group entity IDs by relationship type
+        List<String> actorIds = new ArrayList<>();
+        List<String> eventIds = new ArrayList<>();
+        List<String> locationIds = new ArrayList<>();
+
+        for (var entity : entities) {
+            if (entity instanceof Actor a) {
+                actorIds.add(a.getId());
+            } else if (entity instanceof Event e) {
+                eventIds.add(e.getId());
+            } else if (entity instanceof Location l) {
+                locationIds.add(l.getId());
+            }
+        }
+
+        var session = sessionFactory.openSession();
+        try (Transaction tx = session.beginTransaction()) {
+            if (!actorIds.isEmpty()) {
+                String cypher = """
+                        MATCH (g:Game {gameId: $gameId})
+                        MATCH (a {gameId: $gameId})
+                        WHERE (a:Actor OR a:PlayerActor) AND a.id IN $ids
+                        MERGE (g)-[:HAS_ACTOR]->(a)
+                        """;
+                session.query(cypher, Map.of("gameId", gameId, "ids", actorIds));
+            }
+            if (!locationIds.isEmpty()) {
+                String cypher = """
+                        MATCH (g:Game {gameId: $gameId})
+                        MATCH (l:Location {gameId: $gameId})
+                        WHERE l.id IN $ids
+                        MERGE (g)-[:HAS_LOCATION]->(l)
+                        """;
+                session.query(cypher, Map.of("gameId", gameId, "ids", locationIds));
+            }
+            // Chain events: first links to Game, subsequent link to the previous tail
+            for (String eventId : eventIds) {
+                String cypher = """
+                        MATCH (g:Game {gameId: $gameId})
+                        MATCH (e:Event {id: $eventId})
+                        OPTIONAL MATCH (g)-[:HAS_EVENT]->(first:Event)
+                        OPTIONAL MATCH (first)-[:NEXT_EVENT*0..]->(tail:Event)
+                        WHERE NOT (tail)-[:NEXT_EVENT]->()
+                        WITH g, e, tail
+                        FOREACH (_ IN CASE WHEN tail IS NULL THEN [1] ELSE [] END |
+                            MERGE (g)-[:HAS_EVENT]->(e)
+                        )
+                        FOREACH (_ IN CASE WHEN tail IS NOT NULL AND tail <> e THEN [1] ELSE [] END |
+                            MERGE (tail)-[:NEXT_EVENT]->(e)
+                        )
+                        """;
+                session.query(cypher, Map.of("gameId", gameId, "eventId", eventId));
             }
             tx.commit();
         }

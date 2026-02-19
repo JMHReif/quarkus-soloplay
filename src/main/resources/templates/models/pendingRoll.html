@@ -9,4 +9,8 @@
     {#if roll.target}<span class="roll-target">vs. {roll.target}</span>{/if}
     {#if roll.dc}<span class="roll-dc">DC {roll.dc}</span>{/if}
   </div>
+  <div class="roll-actions">
+    <button type="button" class="roll-button" onclick="window.playInterface && window.playInterface.sendMessage('1d20')">🎲 Roll d20</button>
+    <span class="roll-or">or type your roll (e.g., 1d20+3)</span>
+  </div>
 </div>
