@@ -13,8 +13,10 @@ class ActorCreationEngineTest {
 
         assertTrue(response instanceof GameResponse.Reply);
         String markdown = ((GameResponse.Reply) response).assistantMarkdown();
-        assertTrue(markdown.contains("/reset"));
-        assertTrue(markdown.contains("/confirm"));
+        assertTrue(markdown.contains("/cancel"));
+        assertTrue(markdown.contains("/done"));
+        assertTrue(markdown.contains("/back"));
+        assertTrue(markdown.contains("/status"));
         assertTrue(markdown.contains("/help"));
     }
 }
