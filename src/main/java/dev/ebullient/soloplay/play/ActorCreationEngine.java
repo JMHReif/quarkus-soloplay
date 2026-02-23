@@ -310,7 +310,8 @@ public class ActorCreationEngine {
                 - `/newcharacter` - Start a new character
                 - `/help` - Show this help
 
-                **Current Stage:** """ + (game != null ? game.getCharacterCreationStage().fieldName() : "none"));
+                **Current Stage:** %s"""
+                .formatted(game != null ? game.getCharacterCreationStage().fieldName() : "none"));
     }
 
     private boolean isHelpCommand(String input) {

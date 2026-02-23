@@ -227,7 +227,7 @@ public class GamePlayEngine {
 
     private boolean isRollInput(String input) {
         // e.g., "/roll", "1d20+5", "15", etc.
-        return input.startsWith("/roll") || input.matches("\\d+");
+        return input.startsWith("/roll") || input.matches("\\d+") || input.matches("\\d+d\\d+.*");
     }
 
     /**

@@ -144,7 +144,7 @@ public class RollHandler {
      * Check if the input looks like a roll command.
      */
     public boolean isRollInput(String input) {
-        return input.startsWith("/roll") || input.matches("\\d+");
+        return input.startsWith("/roll") || input.matches("\\d+") || input.matches("\\d+d\\d+.*");
     }
 
     /**

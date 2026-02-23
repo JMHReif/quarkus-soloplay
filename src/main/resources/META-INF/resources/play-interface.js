@@ -26,13 +26,8 @@ class PlayInterface {
         this.streamingBuffers = new Map();
         this.historyLoaded = false;
 
-        // Round-trip state from server, keyed by slot (e.g., "actor_draft", "pending_roll")
+        // Round-trip state from server, keyed by slot (e.g., "pending_roll")
         this.stashBySlot = new Map();
-
-        // Draft panel elements
-        this.draftPanel = document.getElementById('draft-panel');
-        this.draftContent = document.getElementById('draft-content');
-        this.draftCloseBtn = document.getElementById('draft-close');
 
         this.setupEventListeners();
         this.setInputEnabled(false);
@@ -73,10 +68,6 @@ class PlayInterface {
             }
         });
 
-        // Draft panel close button
-        if (this.draftCloseBtn) {
-            this.draftCloseBtn.addEventListener('click', () => this.hideDraftPanel());
-        }
     }
 
     // ===== WebSocket Connection =====
@@ -415,14 +406,7 @@ class PlayInterface {
         }
 
         // Update UI based on slot type
-        if (slot === 'actor_draft') {
-            if (stash && this.draftHasContent(stash)) {
-                this.renderDraftPanel(stash, html);
-                this.showDraftPanel();
-            } else {
-                this.hideDraftPanel();
-            }
-        } else if (slot === 'pending_roll') {
+        if (slot === 'pending_roll') {
             // Pending roll is displayed as an HTML fragment in the chat
             if (html) {
                 this.handleHtmlFragment(slot, html);
@@ -440,111 +424,11 @@ class PlayInterface {
         if (this.stashBySlot.size === 1) {
             return this.stashBySlot.values().next().value;
         }
-        // Multiple stashes - prioritize pending_roll over actor_draft for gameplay
+        // Multiple stashes - prioritize pending_roll for gameplay
         if (this.stashBySlot.has('pending_roll')) {
             return this.stashBySlot.get('pending_roll');
         }
         return this.stashBySlot.values().next().value;
-    }
-
-    renderDraftPanel(draft, serverHtml) {
-        if (!this.draftContent) return;
-
-        const type = draft['@type'];
-
-        // Actor drafts always use client-side editable form (ignore serverHtml)
-        if (type === 'actor_draft') {
-            this.draftContent.innerHTML = this.renderActorDraft(draft);
-            this.bindDraftInputs();
-            return;
-        }
-
-        // Other types: use server HTML or generic fallback
-        if (serverHtml) {
-            this.draftContent.innerHTML = serverHtml;
-        } else {
-            this.draftContent.innerHTML = `<pre>${JSON.stringify(draft, null, 2)}</pre>`;
-        }
-    }
-
-    renderActorDraft(draft) {
-        const field = (label, key, value, type = 'text') => {
-            const escaped = this.escapeHtml(value ?? '');
-            if (type === 'textarea') {
-                return `<div class="draft-field draft-description">
-                    <label class="draft-label" for="draft-${key}">${label}</label>
-                    <textarea class="draft-input draft-textarea" id="draft-${key}" data-key="${key}" rows="3">${escaped}</textarea>
-                </div>`;
-            }
-            const attrs = type === 'number' ? 'type="number" min="1"' : 'type="text"';
-            return `<div class="draft-field">
-                <label class="draft-label" for="draft-${key}">${label}</label>
-                <input class="draft-input" id="draft-${key}" data-key="${key}" ${attrs} value="${escaped}">
-            </div>`;
-        };
-
-        const listField = (label, key, values) => {
-            const joined = (values ?? []).join(', ');
-            return `<div class="draft-field">
-                <label class="draft-label" for="draft-${key}">${label}</label>
-                <input class="draft-input" id="draft-${key}" data-key="${key}" data-list="true" type="text" value="${this.escapeHtml(joined)}" placeholder="comma-separated">
-            </div>`;
-        };
-
-        return `<div class="draft-actor">
-            ${field('Name', 'name', draft.name)}
-            ${field('Class', 'actorClass', draft.actorClass)}
-            ${field('Level', 'level', draft.level, 'number')}
-            ${field('Summary', 'summary', draft.summary)}
-            ${field('Description', 'description', draft.description, 'textarea')}
-            ${listField('Tags', 'tags', draft.tags)}
-            ${listField('Aliases', 'aliases', draft.aliases)}
-        </div>`;
-    }
-
-    bindDraftInputs() {
-        if (!this.draftContent) return;
-        const inputs = this.draftContent.querySelectorAll('.draft-input');
-        inputs.forEach(input => {
-            input.addEventListener('input', () => {
-                const stash = this.stashBySlot.get('actor_draft');
-                if (!stash) return;
-                const key = input.dataset.key;
-                if (input.dataset.list === 'true') {
-                    stash[key] = input.value
-                        .split(',')
-                        .map(s => s.trim())
-                        .filter(s => s.length > 0);
-                } else if (input.type === 'number') {
-                    stash[key] = input.value ? parseInt(input.value, 10) : null;
-                } else {
-                    stash[key] = input.value || null;
-                }
-                console.debug('Draft updated:', key, stash[key]);
-            });
-        });
-    }
-
-    showDraftPanel() {
-        if (this.draftPanel) {
-            this.draftPanel.classList.remove('hidden');
-        }
-    }
-
-    hideDraftPanel() {
-        if (this.draftPanel) {
-            this.draftPanel.classList.add('hidden');
-        }
-        if (this.draftContent) {
-            this.draftContent.innerHTML = '';
-        }
-    }
-
-    draftHasContent(stash) {
-        return stash.name || stash.actorClass || stash.level
-            || stash.summary || stash.description
-            || (stash.tags && stash.tags.length > 0)
-            || (stash.aliases && stash.aliases.length > 0);
     }
 
     escapeHtml(text) {

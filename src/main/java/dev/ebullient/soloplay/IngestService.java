@@ -165,6 +165,15 @@ public class IngestService {
                     continue;
                 }
                 String sectionTitle = extractFirstLine(section);
+                String lowerTitle = sectionTitle.toLowerCase();
+                if (lowerTitle.contains("statblock")
+                        || lowerTitle.equals("traits")
+                        || lowerTitle.equals("actions")
+                        || lowerTitle.equals("legendary actions")
+                        || lowerTitle.equals("regional effects")) {
+                    Log.infof("Skipping statblock section: %s", sectionTitle);
+                    continue;
+                }
                 String enrichedSection = prefix + section;
 
                 // If section is still too large, chunk it again
