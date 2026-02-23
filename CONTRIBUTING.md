@@ -5,6 +5,7 @@ Thanks for your interest in contributing! This guide covers the technical archit
 ## Project Overview
 
 Soloplay is an AI-powered assistant for solo tabletop RPG gameplay that combines:
+
 - Game state management (games, actors, locations, events, plot flags) in a graph database
 - RAG (Retrieval Augmented Generation) queries against campaign/adventure documents
 - AI tools that can autonomously query and update game state
