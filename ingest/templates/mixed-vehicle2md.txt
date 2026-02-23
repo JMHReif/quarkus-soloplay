@@ -32,6 +32,7 @@ token: {resource.token.vaultPath}
 {resource.text}
 
 {/if}
+<!-- BEGIN STATBLOCK -->
 ## {resource.name} Statblock
 *{resource.sizeDimension}; {resource.terrain}*
 {#if resource.shipCrewCargoPace}
@@ -101,5 +102,5 @@ INT: {resource.scores.int} | WIS: {resource.scores.wis} | CHA: {resource.scores.
 {it}
 {/each}{/if}
 {/if}{! END SHIP (type) !}
-
+<!-- END STATBLOCK -->
 ============

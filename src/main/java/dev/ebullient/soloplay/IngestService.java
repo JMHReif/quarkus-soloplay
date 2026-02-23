@@ -43,6 +43,11 @@ public class IngestService {
     static final java.util.regex.Pattern SECTION_HEADER_PATTERN = java.util.regex.Pattern
             .compile("(?m)(?=^#{2,5} )");
 
+    // Regex pattern to remove statblock sections between HTML comments
+    // (?s) enables DOTALL mode (. matches newlines)
+    static final java.util.regex.Pattern STATBLOCK_PATTERN = java.util.regex.Pattern
+            .compile("(?s)<!-- BEGIN STATBLOCK -->.*?<!-- END STATBLOCK -->");
+
     @ConfigProperty(name = "campaign.chunk.size", defaultValue = "500")
     int chunkSize;
 
@@ -144,6 +149,7 @@ public class IngestService {
 
         String cleanContent = removeYamlFrontmatter(content)
                 .replaceAll("\\^[a-z0-9]+$", ""); // replace block references
+        cleanContent = STATBLOCK_PATTERN.matcher(cleanContent).replaceAll("").trim();
 
         String prefix = "";
         if (yamlMetadata.containsKey("adventureName")) {
@@ -165,15 +171,15 @@ public class IngestService {
                     continue;
                 }
                 String sectionTitle = extractFirstLine(section);
-                String lowerTitle = sectionTitle.toLowerCase();
-                if (lowerTitle.contains("statblock")
-                        || lowerTitle.equals("traits")
-                        || lowerTitle.equals("actions")
-                        || lowerTitle.equals("legendary actions")
-                        || lowerTitle.equals("regional effects")) {
-                    Log.infof("Skipping statblock section: %s", sectionTitle);
+
+                // Skip sections that are title-only (no meaningful content beyond the heading)
+                int nlIdx = section.indexOf('\n');
+                String sectionBody = nlIdx >= 0 ? section.substring(nlIdx + 1).trim() : "";
+                if (sectionBody.isBlank()) {
+                    Log.infof("Skipping empty section: %s", sectionTitle);
                     continue;
                 }
+
                 String enrichedSection = prefix + section;
 
                 // If section is still too large, chunk it again

@@ -38,7 +38,17 @@ images:
 token: {resource.token.vaultPath}
 {/if}
 ---
+{#if resource.description }
 # {resource.name}
+
+{resource.description}
+
+<!-- BEGIN STATBLOCK -->
+## {resource.name} statblock
+{#else}
+<!-- BEGIN STATBLOCK -->
+# {resource.name} statblock
+{/if}
 *{resource.size} {resource.fullType}, {resource.alignment}*
 
 - **Armor Class** {#if resource.ac }{resource.ac} {/if}{#if resource.acText }({resource.acText}){/if}
@@ -98,16 +108,11 @@ INT: {resource.scores.int} | WIS: {resource.scores.wis} | CHA: {resource.scores.
 ## {group.name}
 
 {group.desc}
-{/for}{/if}{#if resource.description }
-
-## Description
-
-{resource.description}
-{/if}{#if resource.environment }
+{/for}{/if}{#if resource.environment }
 
 ## Environment
 
 {resource.environment}
 {/if}
-
+<!-- END STATBLOCK -->
 ============

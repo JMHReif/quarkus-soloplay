@@ -32,6 +32,7 @@ token: {resource.token.vaultPath}
 
 {resource.text}
 
+<!-- BEGIN STATBLOCK -->
 ## {resource.name} Statblock
 *{resource.size} {resource.objectType}{#if resource.creatureType } ({resource.creatureType}){/if}*
 
@@ -59,5 +60,5 @@ INT: {resource.scores.int} | WIS: {resource.scores.wis} | CHA: {resource.scores.
 
 {#if action.name }***{action.name}.*** {/if}{action.desc}
 {/for}{/if}
-
+<!-- END STATBLOCK -->
 ============
