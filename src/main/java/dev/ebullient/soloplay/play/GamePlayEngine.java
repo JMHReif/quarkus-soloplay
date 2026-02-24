@@ -52,7 +52,7 @@ public class GamePlayEngine {
                 if (firstSegment != null) {
                     String docId = (String) firstSegment.get("id");
                     Log.infof("sceneStart: found first segment docId=%s", docId);
-                    gameRepository.initCurrentStep(game.getGameId(), docId);
+                    gameRepository.initCurrentStep(game.getGameId(), docId, game.getTurnNumber());
                     adventureContext = fetchAdventureContext(game);
                     Log.infof("sceneStart: adventureContext length=%d",
                             adventureContext != null ? adventureContext.length() : 0);
@@ -130,7 +130,8 @@ public class GamePlayEngine {
                 listTheParty(game),
                 formatLocationContext(game),
                 playerInput,
-                adventureContext);
+                adventureContext,
+                formatJournal(game));
 
         return processResponse(game, response, emitter);
     }
@@ -157,7 +158,8 @@ public class GamePlayEngine {
                 listTheParty(game),
                 formatLocationContext(game),
                 rollResult,
-                adventureContext);
+                adventureContext,
+                formatJournal(game));
 
         return processResponse(game, response, emitter, rollResultEffect);
     }
@@ -168,7 +170,13 @@ public class GamePlayEngine {
 
     private GameResponse processResponse(GameState game, GamePlayResponse response, GameEventEmitter emitter,
             GameEffect additionalEffect) {
-        if (response == null || response.narration() == null) {
+        if (response == null) {
+            Log.errorf("Assistant returned null response for game %s", game.getGameId());
+            return GameResponse.error("No response from GM");
+        }
+        if (response.narration() == null) {
+            Log.errorf("Assistant returned null narration for game %s. Response: %s",
+                    game.getGameId(), response);
             return GameResponse.error("No response from GM");
         }
 
@@ -257,6 +265,7 @@ public class GamePlayEngine {
     /**
      * Fetch adventure context from the current GameSegment's linked Document.
      * Returns formatted current segment + next segment so the LLM can steer the story.
+     * Includes how many turns have been spent on the current segment to help pacing.
      */
     String fetchAdventureContext(GameState game) {
         Map<String, Object> ctx = gameRepository.getCurrentAdventureContext(game.getGameId());
@@ -266,8 +275,18 @@ public class GamePlayEngine {
             return null;
         }
 
+        // Calculate turns spent on this segment
+        int turnsOnSegment = 0;
+        if (ctx.get("startTurnNumber") != null) {
+            int startTurn = ((Number) ctx.get("startTurnNumber")).intValue();
+            turnsOnSegment = game.getTurnNumber() - startTurn;
+        }
+
         StringBuilder sb = new StringBuilder();
         sb.append("--- CURRENT SEGMENT (play this now) ---\n");
+        if (turnsOnSegment > 0) {
+            sb.append("Turns on this segment: ").append(turnsOnSegment).append("\n");
+        }
         if (ctx.get("chapterName") != null) {
             sb.append("Chapter: ").append(ctx.get("chapterName")).append("\n");
         }
@@ -389,9 +408,21 @@ public class GamePlayEngine {
             return "Unknown";
         }
         Location loc = gameRepository.findLocationByNameOrAlias(game.getGameId(), locName);
-        if (loc != null && loc.getSummary() != null && !loc.getSummary().isBlank()) {
-            return locName + " -- " + loc.getSummary();
+        if (loc == null) {
+            return locName;
         }
-        return locName;
+
+        StringBuilder sb = new StringBuilder(locName);
+        if (loc.getSummary() != null && !loc.getSummary().isBlank()) {
+            sb.append(" — ").append(loc.getSummary());
+        }
+        if (loc.getDescription() != null && !loc.getDescription().isBlank()) {
+            String desc = loc.getDescription();
+            if (desc.length() > 300) {
+                desc = desc.substring(0, 300) + "…";
+            }
+            sb.append("\n").append(desc);
+        }
+        return sb.toString();
     }
 }

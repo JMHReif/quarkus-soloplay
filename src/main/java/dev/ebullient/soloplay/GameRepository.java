@@ -96,10 +96,10 @@ public class GameRepository {
                     """;
             session.query(fallbackCypher, Map.of("gameId", gameId));
 
-            // Clean up chat memory that may not have a gameId property
+            // Clean up chained ChatMessage nodes for both memory IDs
             String memoryCypher = """
-                    MATCH (m:ChatMemory)
-                    WHERE m.id IN [$gameId, $characterMemoryId]
+                    MATCH (m:ChatMessage)
+                    WHERE m.memoryId IN [$gameId, $characterMemoryId]
                     DETACH DELETE m
                     """;
             session.query(memoryCypher, Map.of(
@@ -323,7 +323,7 @@ public class GameRepository {
      * Create a GameSegment node and link it to the Game via CURRENT_STEP.
      * Removes any existing CURRENT_STEP relationship first (idempotent).
      */
-    public void initCurrentStep(String gameId, String documentId) {
+    public void initCurrentStep(String gameId, String documentId, int turnNumber) {
         var session = sessionFactory.openSession();
         try (Transaction tx = session.beginTransaction()) {
             String cypher = """
@@ -336,6 +336,7 @@ public class GameRepository {
                         gameId: $gameId,
                         documentId: $documentId,
                         status: 'current',
+                        startTurnNumber: $turnNumber,
                         createdAt: $now
                     })
                     CREATE (g)-[:CURRENT_STEP]->(gs)
@@ -344,6 +345,7 @@ public class GameRepository {
                     "gameId", gameId,
                     "segmentId", gameId + ":segment-1",
                     "documentId", documentId,
+                    "turnNumber", turnNumber,
                     "now", System.currentTimeMillis()));
             tx.commit();
         }
@@ -351,7 +353,8 @@ public class GameRepository {
 
     /**
      * Get adventure context by joining GameSegment.documentId to Document.
-     * Returns current segment text/metadata and full next segment text/metadata.
+     * Returns current segment text/metadata, next segment text/metadata,
+     * and the turn number when the current segment started.
      */
     public Map<String, Object> getCurrentAdventureContext(String gameId) {
         var session = sessionFactory.openSession();
@@ -361,6 +364,7 @@ public class GameRepository {
                 OPTIONAL MATCH (d)-[:NEXT]->(nextDoc:Document)
                 RETURN d.text AS currentText, d.chapterName AS chapterName,
                        d.section AS section,
+                       gs.startTurnNumber AS startTurnNumber,
                        nextDoc.text AS nextText, nextDoc.chapterName AS nextChapterName,
                        nextDoc.section AS nextSection
                 """;
@@ -403,6 +407,7 @@ public class GameRepository {
                         gameId: $gameId,
                         documentId: $nextDocId,
                         status: 'current',
+                        startTurnNumber: $turnNumber,
                         createdAt: $now
                     })
                     CREATE (g)-[:CURRENT_STEP]->(newGs)
@@ -450,13 +455,18 @@ public class GameRepository {
     // ========= CHECKPOINTS ===============
 
     /**
-     * Create a checkpoint GameSegment and link it to the Game via CHECKPOINT.
+     * Create a checkpoint GameSegment and append it to the checkpoint chain.
+     * Chain structure: (Game)-[:HAS_CHECKPOINT]->(GS1)-[:NEXT_CHECKPOINT]->(GS2)->...
      */
     public void saveCheckpoint(String gameId, String category, String content, int turnNumber) {
         var session = sessionFactory.openSession();
         try (Transaction tx = session.beginTransaction()) {
             String cypher = """
                     MATCH (g:Game {gameId: $gameId})
+                    OPTIONAL MATCH (g)-[:HAS_CHECKPOINT]->(first:GameSegment)
+                    OPTIONAL MATCH (first)-[:NEXT_CHECKPOINT*0..]->(tail:GameSegment)
+                    WHERE NOT (tail)-[:NEXT_CHECKPOINT]->()
+                    WITH g, tail
                     CREATE (gs:GameSegment {
                         id: $segmentId,
                         gameId: $gameId,
@@ -466,7 +476,12 @@ public class GameRepository {
                         turnNumber: $turnNumber,
                         createdAt: $now
                     })
-                    CREATE (g)-[:CHECKPOINT]->(gs)
+                    FOREACH (_ IN CASE WHEN tail IS NULL THEN [1] ELSE [] END |
+                        CREATE (g)-[:HAS_CHECKPOINT]->(gs)
+                    )
+                    FOREACH (_ IN CASE WHEN tail IS NOT NULL THEN [1] ELSE [] END |
+                        CREATE (tail)-[:NEXT_CHECKPOINT]->(gs)
+                    )
                     """;
             session.query(cypher, Map.of(
                     "gameId", gameId,
@@ -481,13 +496,25 @@ public class GameRepository {
 
     /**
      * Delete all checkpoints of a given category for a game.
+     * Re-links the chain around removed nodes.
      */
     public void clearCheckpoints(String gameId, String category) {
         var session = sessionFactory.openSession();
         try (Transaction tx = session.beginTransaction()) {
+            // Re-link chain around nodes being removed, then delete them
             String cypher = """
-                    MATCH (g:Game {gameId: $gameId})-[r:CHECKPOINT]->(gs:GameSegment {status: 'checkpoint', category: $category})
-                    DETACH DELETE gs
+                    MATCH (g:Game {gameId: $gameId})
+                    MATCH (toRemove:GameSegment {gameId: $gameId, status: 'checkpoint', category: $category})
+                    OPTIONAL MATCH (pred)-[r1:NEXT_CHECKPOINT]->(toRemove)
+                    OPTIONAL MATCH (toRemove)-[r2:NEXT_CHECKPOINT]->(succ)
+                    OPTIONAL MATCH (g)-[r3:HAS_CHECKPOINT]->(toRemove)
+                    FOREACH (_ IN CASE WHEN pred IS NOT NULL AND succ IS NOT NULL THEN [1] ELSE [] END |
+                        CREATE (pred)-[:NEXT_CHECKPOINT]->(succ)
+                    )
+                    FOREACH (_ IN CASE WHEN r3 IS NOT NULL AND succ IS NOT NULL THEN [1] ELSE [] END |
+                        CREATE (g)-[:HAS_CHECKPOINT]->(succ)
+                    )
+                    DETACH DELETE toRemove
                     """;
             session.query(cypher, Map.of("gameId", gameId, "category", category));
             tx.commit();
@@ -495,12 +522,13 @@ public class GameRepository {
     }
 
     /**
-     * Return all checkpoint GameSegments for a game, ordered by turnNumber.
+     * Return all checkpoint GameSegments for a game by traversing the checkpoint chain.
      */
     public List<Map<String, Object>> getCheckpoints(String gameId) {
         var session = sessionFactory.openSession();
         String cypher = """
-                MATCH (g:Game {gameId: $gameId})-[:CHECKPOINT]->(gs:GameSegment {status: 'checkpoint'})
+                MATCH (g:Game {gameId: $gameId})-[:HAS_CHECKPOINT]->(first:GameSegment {status: 'checkpoint'})
+                MATCH path = (first)-[:NEXT_CHECKPOINT*0..]->(gs:GameSegment {status: 'checkpoint'})
                 RETURN gs.category AS category, gs.summary AS content, gs.turnNumber AS turnNumber
                 ORDER BY gs.turnNumber
                 """;

@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
@@ -11,21 +12,27 @@ import jakarta.inject.Inject;
 
 import org.neo4j.ogm.session.Session;
 import org.neo4j.ogm.session.SessionFactory;
+import org.neo4j.ogm.transaction.Transaction;
 
+import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.ChatMessageDeserializer;
 import dev.langchain4j.data.message.ChatMessageSerializer;
+import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import io.quarkus.logging.Log;
 
 /**
- * Persists LangChain4j chat memory to Neo4j.
+ * Persists LangChain4j chat memory to Neo4j as a chain of individual message nodes.
  *
- * Stores conversation history as a ChatMemory node with serialized JSON messages.
- * Memory is keyed by storyThreadId (the @MemoryId parameter from PlayAgent).
+ * Each message is stored as a separate :ChatMessage node, chained via :NEXT_MESSAGE
+ * relationships. The first node in the chain is linked from the Game via :HAS_MEMORY.
  *
  * Node structure:
- * (:ChatMemory {id: "story-thread-slug", messagesJson: "[...]", updatedAt: ...})
+ * (:Game)-[:HAS_MEMORY]->(M1:ChatMessage)-[:NEXT_MESSAGE]->(M2)-[:NEXT_MESSAGE]->(M3)
+ *
+ * Each ChatMessage node carries:
+ * {id, memoryId, sequence, messageJson, messageType, createdAt}
  */
 @ApplicationScoped
 public class Neo4jChatMemoryStore implements ChatMemoryStore {
@@ -35,6 +42,21 @@ public class Neo4jChatMemoryStore implements ChatMemoryStore {
     @Inject
     Event<ChatMemoryCompactedEvent> compactedEvent;
 
+    /**
+     * Matches bulky template sections that repeat identically each turn.
+     * Strips: ADVENTURE SEGMENTS, CAMPAIGN NOTES, CURRENT LOCATION,
+     * PLAYER CHARACTERS, CURRENT ADVENTURE SEGMENT.
+     * Stops at the next === header, unique content markers, or end of string.
+     */
+    private static final Pattern TEMPLATE_SECTION = Pattern.compile(
+            "=== (?:ADVENTURE SEGMENTS|CAMPAIGN NOTES[^\\n]*|CURRENT LOCATION"
+                    + "|PLAYER CHARACTERS|CURRENT ADVENTURE SEGMENT) ===\\n"
+                    + "[\\s\\S]*?"
+                    + "(?==== [A-Z]|Player says:|The player rolled for:|Welcome the player|RESPOND matching|\\Z)");
+
+    private record StoredMessage(long sequence, String messageJson, String messageType) {
+    }
+
     @Override
     public List<ChatMessage> getMessages(Object memoryId) {
         String id = memoryId.toString();
@@ -42,112 +64,130 @@ public class Neo4jChatMemoryStore implements ChatMemoryStore {
 
         Session session = sessionFactory.openSession();
         Iterable<Map<String, Object>> results = session.query(
-                "MATCH (m:ChatMemory {id: $id}) RETURN m.messagesJson AS messagesJson",
+                """
+                        MATCH (m:ChatMessage {memoryId: $id})
+                        RETURN m.messageJson AS messageJson, m.sequence AS sequence
+                        ORDER BY m.sequence ASC
+                        """,
                 Map.of("id", id));
 
+        List<ChatMessage> messages = new ArrayList<>();
         for (Map<String, Object> row : results) {
-            String messagesJson = (String) row.get("messagesJson");
-            if (messagesJson != null && !messagesJson.isBlank()) {
-                List<ChatMessage> messages = ChatMessageDeserializer.messagesFromJson(messagesJson);
-                Log.debugf("Retrieved %d messages for memoryId: %s", messages.size(), id);
-                return messages;
+            String messageJson = (String) row.get("messageJson");
+            if (messageJson != null && !messageJson.isBlank()) {
+                messages.add(ChatMessageDeserializer.messagesFromJson("[" + messageJson + "]").get(0));
             }
         }
 
-        Log.debugf("No messages found for memoryId: %s", id);
-        return List.of();
+        Log.debugf("Retrieved %d messages for memoryId: %s", messages.size(), id);
+        return messages;
     }
 
     @Override
     public void updateMessages(Object memoryId, List<ChatMessage> messages) {
         String id = memoryId.toString();
-        Instant now = Instant.now();
-
         Log.debugf("Updating %d messages for memoryId: %s", messages.size(), id);
 
-        // Detect compaction by comparing with previously stored messages
-        List<ChatMessage> previousMessages = getMessages(memoryId);
-        List<ChatMessage> droppedMessages = detectDroppedMessages(previousMessages, messages);
-
-        if (!droppedMessages.isEmpty()) {
-            Log.infof("Memory compaction detected for %s: %d messages dropped",
-                    id, droppedMessages.size());
-            compactedEvent.fire(new ChatMemoryCompactedEvent(id, droppedMessages));
+        if (messages.isEmpty()) {
+            deleteMessages(memoryId);
+            return;
         }
 
-        // Persist the new messages
-        String messagesJson = ChatMessageSerializer.messagesToJson(messages);
-        Session session = sessionFactory.openSession();
-        session.query(
-                """
-                        MERGE (m:ChatMemory {id: $id})
-                        SET m.messagesJson = $messagesJson,
-                            m.updatedAt = $updatedAt
-                        """,
-                Map.of(
-                        "id", id,
-                        "messagesJson", messagesJson,
-                        "updatedAt", now.toString()));
+        // 1. Read existing chain
+        List<StoredMessage> existing = readExistingChain(id);
 
-        // Link ChatMemory to its Game via HAS_MEMORY relationship.
-        // memoryId is either "gameId" or "gameId-character" — strip suffix to get gameId.
-        String gameId = id.endsWith("-character") ? id.substring(0, id.length() - "-character".length()) : id;
-        session.query(
-                """
-                        MATCH (g:Game {gameId: $gameId})
-                        MATCH (m:ChatMemory {id: $id})
-                        MERGE (g)-[:HAS_MEMORY]->(m)
-                        """,
-                Map.of("gameId", gameId, "id", id));
-    }
-
-    /**
-     * Detect messages that were dropped during compaction.
-     * Compares the start of the previous list with the new list to find
-     * messages that are no longer present.
-     */
-    private List<ChatMessage> detectDroppedMessages(List<ChatMessage> previous, List<ChatMessage> current) {
-        if (previous.isEmpty() || current.isEmpty()) {
-            return List.of();
-        }
-
-        // Find where the current list starts in the previous list
-        // The current list should be a suffix of what was there + new messages
-        // Messages at the start of previous that aren't in current were dropped
-
-        List<ChatMessage> dropped = new ArrayList<>();
-
-        // Find the first message in current that matches something in previous
-        // All previous messages before that match point were dropped
-        ChatMessage firstCurrent = current.get(0);
-
-        for (int i = 0; i < previous.size(); i++) {
-            ChatMessage prev = previous.get(i);
-            if (messagesEqual(prev, firstCurrent)) {
-                // Found the match point - everything before i was dropped
-                return dropped;
+        // 2. Detect compaction: LangChain4j calls updateMessages() once per message
+        //    add (user, then AI). Each call adds exactly 1 message to the window.
+        //    If incoming <= existing, at least 1 message was evicted.
+        if (existing.size() >= 2) {
+            int droppedCount = existing.size() + 1 - messages.size();
+            if (droppedCount > 0) {
+                Log.debugf("Memory eviction for %s: %d message(s) evicted", id, droppedCount);
+                // Collect only dropped AiMessages (which contain turn summaries)
+                List<ChatMessage> droppedAiMessages = new ArrayList<>();
+                for (StoredMessage sm : existing) {
+                    if (droppedAiMessages.size() >= droppedCount)
+                        break;
+                    if ("SYSTEM".equals(sm.messageType()) || "USER".equals(sm.messageType()))
+                        continue;
+                    droppedAiMessages.add(
+                            ChatMessageDeserializer.messagesFromJson("[" + sm.messageJson() + "]").get(0));
+                }
+                if (!droppedAiMessages.isEmpty()) {
+                    compactedEvent.fire(
+                            new ChatMemoryCompactedEvent(extractGameId(id), droppedAiMessages));
+                }
             }
-            dropped.add(prev);
         }
 
-        // If we didn't find a match, assume all previous messages were dropped
-        // (this shouldn't normally happen but handles edge cases)
-        return dropped;
-    }
+        // 3. Full replacement: delete all existing, create all incoming.
+        //    With max-messages typically <=10, this is cheap and avoids
+        //    fragile JSON-equality diffs that break on serialization round-trips.
+        Session session = sessionFactory.openSession();
+        try (Transaction tx = session.beginTransaction()) {
+            if (!existing.isEmpty()) {
+                session.query(
+                        "MATCH (m:ChatMessage {memoryId: $id}) DETACH DELETE m",
+                        Map.of("id", id));
+            }
 
-    /**
-     * Compare two ChatMessages for equality.
-     * Uses JSON serialization for comparison since ChatMessage subtypes
-     * have different accessor methods (UserMessage.singleText(), AiMessage.text(), etc.)
-     */
-    private boolean messagesEqual(ChatMessage a, ChatMessage b) {
-        if (a.type() != b.type()) {
-            return false;
+            Instant now = Instant.now();
+            for (int i = 0; i < messages.size(); i++) {
+                ChatMessage msg = messages.get(i);
+                // Strip bulky template content from user messages before persisting.
+                // The current turn's full template is sent to the LLM, but stored history
+                // keeps only the unique content (player input, roll details, etc.)
+                if (msg instanceof UserMessage um) {
+                    msg = UserMessage.from(stripTemplateContent(um.singleText()));
+                }
+                String msgJson = ChatMessageSerializer.messageToJson(msg);
+                String messageType = msg.type().name();
+                long seq = i + 1;
+                String nodeId = id + ":msg-" + seq;
+
+                session.query(
+                        """
+                                OPTIONAL MATCH (tail:ChatMessage {memoryId: $id})
+                                WHERE NOT (tail)-[:NEXT_MESSAGE]->()
+                                WITH tail LIMIT 1
+                                CREATE (new:ChatMessage {
+                                    id: $nodeId,
+                                    memoryId: $id,
+                                    sequence: $seq,
+                                    messageJson: $json,
+                                    messageType: $type,
+                                    createdAt: $now
+                                })
+                                FOREACH (_ IN CASE WHEN tail IS NOT NULL THEN [1] ELSE [] END |
+                                    CREATE (tail)-[:NEXT_MESSAGE]->(new)
+                                )
+                                """,
+                        Map.of(
+                                "id", id,
+                                "nodeId", nodeId,
+                                "seq", seq,
+                                "json", msgJson,
+                                "type", messageType,
+                                "now", now.toString()));
+            }
+
+            // Repoint HAS_MEMORY to head (node with no incoming NEXT_MESSAGE).
+            // Silently skips if Game node doesn't exist.
+            String gameId = extractGameId(id);
+            session.query(
+                    """
+                            MATCH (g:Game {gameId: $gameId})
+                            OPTIONAL MATCH (g)-[old:HAS_MEMORY]->(:ChatMessage {memoryId: $id})
+                            DELETE old
+                            WITH g
+                            MATCH (head:ChatMessage {memoryId: $id})
+                            WHERE NOT (:ChatMessage)-[:NEXT_MESSAGE]->(head)
+                            MERGE (g)-[:HAS_MEMORY]->(head)
+                            """,
+                    Map.of("gameId", gameId, "id", id));
+
+            tx.commit();
         }
-        // Use JSON serialization for reliable comparison
-        String jsonA = ChatMessageSerializer.messageToJson(a);
-        String jsonB = ChatMessageSerializer.messageToJson(b);
-        return jsonA.equals(jsonB);
     }
 
     @Override
@@ -157,7 +197,43 @@ public class Neo4jChatMemoryStore implements ChatMemoryStore {
 
         Session session = sessionFactory.openSession();
         session.query(
-                "MATCH (m:ChatMemory {id: $id}) DETACH DELETE m",
+                "MATCH (m:ChatMessage {memoryId: $id}) DETACH DELETE m",
                 Map.of("id", id));
+    }
+
+    private List<StoredMessage> readExistingChain(String id) {
+        Session session = sessionFactory.openSession();
+        Iterable<Map<String, Object>> results = session.query(
+                """
+                        MATCH (m:ChatMessage {memoryId: $id})
+                        RETURN m.messageJson AS messageJson, m.sequence AS sequence, m.messageType AS messageType
+                        ORDER BY m.sequence ASC
+                        """,
+                Map.of("id", id));
+
+        List<StoredMessage> chain = new ArrayList<>();
+        for (Map<String, Object> row : results) {
+            long sequence = ((Number) row.get("sequence")).longValue();
+            String messageJson = (String) row.get("messageJson");
+            String messageType = (String) row.get("messageType");
+            chain.add(new StoredMessage(sequence, messageJson, messageType));
+        }
+        return chain;
+    }
+
+    /**
+     * Strip repeated template content from a user message, keeping only the
+     * unique parts (player input, roll details, action header, adventure name).
+     */
+    String stripTemplateContent(String text) {
+        String stripped = TEMPLATE_SECTION.matcher(text).replaceAll("");
+        stripped = stripped.replaceAll("\\n{3,}", "\n\n");
+        return stripped.trim();
+    }
+
+    private String extractGameId(String memoryId) {
+        return memoryId.endsWith("-character")
+                ? memoryId.substring(0, memoryId.length() - "-character".length())
+                : memoryId;
     }
 }

@@ -21,7 +21,7 @@ public class GamePlayResponseGuardrail implements OutputGuardrail {
     /**
      * The default prompt to append to the LLM during a reprompt (JsonExtractorOutputGuardrail)
      */
-    public static final String REPROMPT_PROMPT = "Please try again. Respond ONLY with a JSON object. Required fields: \"narration\" (story text), \"turnSummary\" (1-2 sentences), \"currentLocation\" (just the name), \"actorsPresent\" (array of name strings), \"locationsPresent\" (array of name strings). Do not acknowledge this correction.";
+    public static final String REPROMPT_PROMPT = "Do NOT call any tools. Respond ONLY with a JSON object. Required fields: \"narration\" (story text), \"turnSummary\" (1-2 sentences), \"currentLocation\" (just the name), \"actorsPresent\" (array of name strings), \"locationsPresent\" (array of name strings). Do not acknowledge this correction.";
 
     @Inject
     ObjectMapper objectMapper;
@@ -29,9 +29,17 @@ public class GamePlayResponseGuardrail implements OutputGuardrail {
     @Override
     public OutputGuardrailResult validate(AiMessage responseFromLLM) {
         try {
+            // Tool-call responses are intermediate — let the framework handle them
+            if (responseFromLLM.hasToolExecutionRequests()) {
+                Log.debugf("Guardrail: passing through tool execution request");
+                return OutputGuardrailResult.success();
+            }
+
             Log.debugf("AiMessage: %s", objectMapper.writeValueAsString(responseFromLLM));
             if (responseFromLLM.text() == null || responseFromLLM.text().isBlank()) {
-                return reprompt("No text in response", REPROMPT_PROMPT);
+                return reprompt("No text in response",
+                        "You MUST respond with a JSON object now. Do NOT call any more tools. "
+                                + REPROMPT_PROMPT);
             }
             GamePlayResponse response = objectMapper.readValue(responseFromLLM.text(), GamePlayResponse.class);
             if (response.narration() == null) {

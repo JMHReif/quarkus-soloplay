@@ -42,11 +42,16 @@ FOR (f:File) REQUIRE f.filename IS UNIQUE;
 CREATE INDEX file_source_file IF NOT EXISTS
 FOR (f:File) ON (f.sourceFile);
 
-// ===== ChatMemory Indexes =====
+// ===== ChatMessage Indexes (chained message nodes) =====
 
-// Unique constraint on chat memory ID
-CREATE CONSTRAINT chat_memory_id_unique IF NOT EXISTS
-FOR (m:ChatMemory) REQUIRE m.id IS UNIQUE;
+CREATE CONSTRAINT chat_message_id_unique IF NOT EXISTS
+FOR (m:ChatMessage) REQUIRE m.id IS UNIQUE;
+
+CREATE INDEX chat_message_memory_id IF NOT EXISTS
+FOR (m:ChatMessage) ON (m.memoryId);
+
+CREATE INDEX chat_message_memory_id_sequence IF NOT EXISTS
+FOR (m:ChatMessage) ON (m.memoryId, m.sequence);
 
 // ===== Game State Indexes/Constraints =====
 
@@ -102,6 +107,14 @@ FOR (e:Event) ON (e.gameId, e.turnNumber);
 
 CREATE INDEX event_tags IF NOT EXISTS
 FOR (e:Event) ON (e.tags);
+
+// ===== GameSegment Indexes =====
+
+CREATE CONSTRAINT game_segment_id_unique IF NOT EXISTS
+FOR (gs:GameSegment) REQUIRE gs.id IS UNIQUE;
+
+CREATE INDEX game_segment_game_id IF NOT EXISTS
+FOR (gs:GameSegment) ON (gs.gameId);
 
 // To verify indexes were created
 SHOW INDEXES;

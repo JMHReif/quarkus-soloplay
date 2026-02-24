@@ -133,7 +133,7 @@ public abstract class BaseEntity {
     }
 
     public void addSources(Collection<String> sources) {
-        sources.addAll(sources);
+        this.sources.addAll(sources);
         markDirty();
     }
 

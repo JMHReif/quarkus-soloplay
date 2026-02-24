@@ -1,11 +1,3 @@
-=== PLAYER CHARACTERS ===
-{theParty}
-{#if gameJournal}
-
-=== CAMPAIGN NOTES (your persistent memory) ===
-{gameJournal}
-{/if}
-
 {#if adventureContext}
 === ADVENTURE MODE (guided) ===
 
@@ -40,5 +32,13 @@ Welcome the player and ask what kind of adventure they're in the mood for:
 Based on their answer, you'll collaboratively build the opening scene.
 Keep it conversational - this is session zero for the story.
 {/if}
+{#if gameJournal}
+
+=== CAMPAIGN NOTES (your persistent memory) ===
+{gameJournal}
+{/if}
+
+=== PLAYER CHARACTERS ===
+{theParty}
 
 RESPOND matching the OUTPUT FORMAT above (narration, turnSummary, currentSituation, etc. at top level).

@@ -49,7 +49,8 @@ public interface GamePlayAssistant {
             List<String> theParty,
             String locationName,
             String playerInput,
-            String adventureContext);
+            String adventureContext,
+            String gameJournal);
 
     // --- Roll Resolution: Player completed a roll ---
 
@@ -60,5 +61,6 @@ public interface GamePlayAssistant {
             List<String> theParty,
             String locationName,
             RollResult rollResult,
-            String adventureContext);
+            String adventureContext,
+            String gameJournal);
 }
