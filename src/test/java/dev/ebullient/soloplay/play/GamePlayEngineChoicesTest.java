@@ -37,13 +37,15 @@ class GamePlayEngineChoicesTest {
         game.setCurrentLocation("Somewhere");
 
         Mockito.when(gameRepository.findTheParty(gameId)).thenReturn(List.of());
+        Mockito.when(gameRepository.getCheckpoints(gameId)).thenReturn(List.of());
 
         Mockito.when(assistant.turn(
                 Mockito.eq(gameId),
-                Mockito.anyString(),
+                Mockito.any(),
                 Mockito.anyList(),
-                Mockito.anyString(),
-                Mockito.anyString(),
+                Mockito.any(),
+                Mockito.any(),
+                Mockito.any(),
                 Mockito.any()))
                 .thenReturn(new GamePlayResponse(
                         "narration",
