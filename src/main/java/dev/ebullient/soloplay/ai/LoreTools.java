@@ -86,7 +86,7 @@ public class LoreTools {
         String cypher = """
                 CALL db.index.vector.queryNodes($indexName, $maxResults, $embedding)
                 YIELD node, score
-                WHERE score >= $minScore AND NOT node:Adventure
+                WHERE score >= $minScore
                 RETURN node.text AS text, node.name AS name,
                        node.filename AS filename, score
                 ORDER BY score DESC

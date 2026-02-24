@@ -36,33 +36,47 @@ public class ChatMemoryCompactionListener {
         String gameId = event.gameId();
         List<ChatMessage> droppedMessages = event.droppedMessages();
 
-        Log.infof("Processing compaction for %s: %d messages dropped",
+        Log.debugf("Processing compaction for %s: %d messages dropped",
                 gameId, droppedMessages.size());
 
         List<String> summaries = extractTurnSummaries(droppedMessages);
         if (summaries.isEmpty()) {
-            Log.infof("No turn summaries found in dropped messages for %s", gameId);
+            Log.debugf("No turn summaries found in dropped messages for %s", gameId);
             return;
         }
 
-        // Combine into a concise recap
-        StringBuilder recap = new StringBuilder("Earlier story: ");
+        // Append new summaries to existing memory checkpoint content
+        StringBuilder recap = new StringBuilder();
+        String existing = findExistingMemoryContent(gameId);
+        if (existing != null) {
+            recap.append(existing).append(" ");
+        } else {
+            recap.append("Earlier story: ");
+        }
         for (String summary : summaries) {
             recap.append(summary).append(" ");
         }
         String content = recap.toString().trim();
 
-        // Cap to avoid bloating the journal
+        // Keep only the tail if it exceeds the cap (most recent context wins)
         if (content.length() > 1000) {
             content = content.substring(content.length() - 1000);
         }
 
-        // Replace any previous memory checkpoint with this updated one
         gameRepository.clearCheckpoints(gameId, "memory");
         gameRepository.saveCheckpoint(gameId, "memory", content, 0);
 
-        Log.infof("Saved memory checkpoint for %s (%d summaries, %d chars)",
+        Log.infof("Saved memory checkpoint for %s (%d new summaries, %d chars total)",
                 gameId, summaries.size(), content.length());
+    }
+
+    private String findExistingMemoryContent(String gameId) {
+        for (var cp : gameRepository.getCheckpoints(gameId)) {
+            if ("memory".equals(cp.get("category"))) {
+                return (String) cp.get("content");
+            }
+        }
+        return null;
     }
 
     /**

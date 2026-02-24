@@ -106,6 +106,7 @@ public class GameState extends BaseEntity {
      */
     public void setGamePhase(GamePhase gamePhase) {
         this.gamePhase = gamePhase;
+        markDirty();
     }
 
     public Long getLastPlayedAt() {

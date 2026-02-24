@@ -158,10 +158,10 @@ public class NamedBaseEntity extends BaseEntity {
         if (p.description() != null) {
             this.description = p.description();
         }
-        if (p.aliases() == null || p.aliases().isEmpty()) {
+        if (p.aliases() != null && !p.aliases().isEmpty()) {
             setAliases(p.aliases());
         }
-        if (p.tags() == null || p.tags().isEmpty()) {
+        if (p.tags() != null && !p.tags().isEmpty()) {
             setTags(p.tags());
         }
         markDirty();

@@ -2,11 +2,6 @@
 {#if adventureName}
 Adventure: {adventureName}
 {/if}
-
-=== PLAYER CHARACTERS ===
-{theParty}
-
-Current Location: {locationName}
 {#if adventureContext}
 
 === ADVENTURE SEGMENTS ===
@@ -14,6 +9,17 @@ Current Location: {locationName}
 
 Follow the CURRENT SEGMENT. Steer toward the NEXT SEGMENT. Set "segmentComplete" to true when the current segment is covered.
 {/if}
+{#if gameJournal}
+
+=== CAMPAIGN NOTES (your persistent memory) ===
+{gameJournal}
+{/if}
+
+=== CURRENT LOCATION ===
+{locationName}
+
+=== PLAYER CHARACTERS ===
+{theParty}
 
 Player says:
 
