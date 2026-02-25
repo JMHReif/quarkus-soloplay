@@ -29,4 +29,4 @@ then prompt for their next action.
 
 MUST use the player character's actual name. DO NOT invent or alter character names.
 
-RESPOND matching the OUTPUT FORMAT above (narration, turnSummary, currentSituation, etc. at top level).
+RESPOND matching the specified OUTPUT FORMAT (reasoning, narration, pendingRoll, playerChoices).

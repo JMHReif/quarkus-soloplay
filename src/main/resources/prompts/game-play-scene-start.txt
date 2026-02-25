@@ -41,4 +41,4 @@ Keep it conversational - this is session zero for the story.
 === PLAYER CHARACTERS ===
 {theParty}
 
-RESPOND matching the OUTPUT FORMAT above (narration, turnSummary, currentSituation, etc. at top level).
+RESPOND matching the specified OUTPUT FORMAT (reasoning, narration, pendingRoll, playerChoices).

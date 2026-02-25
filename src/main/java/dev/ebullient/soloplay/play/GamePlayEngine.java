@@ -35,6 +35,9 @@ public class GamePlayEngine {
     GamePlayAssistant assistant;
 
     @Inject
+    GamePlayExtractor extractor;
+
+    @Inject
     ObjectMapper objectMapper;
 
     @Inject
@@ -63,14 +66,14 @@ public class GamePlayEngine {
                 Log.infof("sceneStart: no adventure set (sandbox mode)");
             }
 
-            var response = assistant.sceneStart(
+            var narration = assistant.sceneStart(
                     game.getGameId(),
                     game.getAdventureName(),
                     listTheParty(game),
                     adventureContext,
                     formatJournal(game));
 
-            return processResponse(game, response, emitter);
+            return processResponse(game, narrateThenExtract(narration, emitter), emitter);
         } catch (Exception e) {
             return handleAssistantError(e);
         }
@@ -82,7 +85,7 @@ public class GamePlayEngine {
         try {
             String adventureContext = fetchAdventureContext(game);
 
-            var response = assistant.recap(
+            var narration = assistant.recap(
                     game.getGameId(),
                     game.getAdventureName(),
                     listTheParty(game),
@@ -91,7 +94,7 @@ public class GamePlayEngine {
                     adventureContext,
                     formatJournal(game));
 
-            return processResponse(game, response, emitter);
+            return processResponse(game, narrateThenExtract(narration, emitter), emitter);
         } catch (Exception e) {
             return handleAssistantError(e);
         }
@@ -124,7 +127,7 @@ public class GamePlayEngine {
         Log.debugf("handleTurn: adventureContext=%s",
                 adventureContext != null ? "present (" + adventureContext.length() + " chars)" : "null");
 
-        var response = assistant.turn(
+        var narration = assistant.turn(
                 game.getGameId(),
                 game.getAdventureName(),
                 listTheParty(game),
@@ -133,7 +136,7 @@ public class GamePlayEngine {
                 adventureContext,
                 formatJournal(game));
 
-        return processResponse(game, response, emitter);
+        return processResponse(game, narrateThenExtract(narration, emitter), emitter);
     }
 
     private GameResponse resolveRoll(GameState game, PendingRoll pending, String rollInput,
@@ -152,7 +155,7 @@ public class GamePlayEngine {
 
         String adventureContext = fetchAdventureContext(game);
 
-        var response = assistant.resolveRoll(
+        var narration = assistant.resolveRoll(
                 game.getGameId(),
                 game.getAdventureName(),
                 listTheParty(game),
@@ -161,7 +164,35 @@ public class GamePlayEngine {
                 adventureContext,
                 formatJournal(game));
 
-        return processResponse(game, response, emitter, rollResultEffect);
+        return processResponse(game, narrateThenExtract(narration, emitter), emitter, rollResultEffect);
+    }
+
+    /**
+     * Two-step LLM: merge Step 1 narration (creative decisions) with Step 2 extraction (structured data).
+     * pendingRoll and playerChoices come from Step 1; all other fields from Step 2.
+     */
+    private GamePlayResponse narrateThenExtract(GamePlayNarration narration, GameEventEmitter emitter) {
+        Log.debugf("Step 1 reasoning: %s", narration.reasoning());
+        Log.debugf("Step 1 narration length: %d chars",
+                narration.narration() != null ? narration.narration().length() : 0);
+
+        emitter.assistantDelta("Extracting world state…\n");
+        GamePlayResponse extracted = extractor.extract(narration.narration(), narration.reasoning());
+
+        // Merge: creative decisions from Step 1, extracted data from Step 2
+        return new GamePlayResponse(
+                narration.narration(),
+                extracted.turnSummary(),
+                narration.pendingRoll(),
+                narration.playerChoices(),
+                extracted.patches(),
+                extracted.currentLocation(),
+                extracted.actorsPresent(),
+                extracted.locationsPresent(),
+                extracted.sources(),
+                extracted.segmentComplete(),
+                extracted.majorDecision(),
+                extracted.checkpoint());
     }
 
     private GameResponse processResponse(GameState game, GamePlayResponse response, GameEventEmitter emitter) {
