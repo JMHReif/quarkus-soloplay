@@ -16,4 +16,5 @@ import io.quarkiverse.langchain4j.RegisterAiService;
 public interface ChatAssistant {
 
     JsonChatResponse chat(@UserMessage String userMessage);
+
 }
