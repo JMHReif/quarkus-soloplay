@@ -8,11 +8,11 @@ import dev.langchain4j.service.guardrail.OutputGuardrails;
 import io.quarkiverse.langchain4j.RegisterAiService;
 import io.quarkiverse.langchain4j.ToolBox;
 
-@SystemMessage(fromResource = "prompts/lore-assistant.txt")
 @RequestScoped
 @RegisterAiService(retrievalAugmentor = LoreRetriever.class, chatMemoryProviderSupplier = InMemoryChatMemoryProviderSupplier.class)
 public interface LoreAssistant {
 
+    @SystemMessage(fromResource = "prompts/lore-assistant.txt")
     @ToolBox(LoreTools.class)
     @OutputGuardrails(JsonChatResponseGuardrail.class)
     JsonChatResponse lore(@UserMessage String question);
