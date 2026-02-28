@@ -1,115 +1,117 @@
 # Soloplay
 
-An AI-powered assistant for solo tabletop RPG gameplay, built with Quarkus and LangChain4j.
+An AI-powered solo tabletop RPG assistant,
+built as a conference demo for progressive disclosure of LLM and RAG integration concepts.
 
-## What is Soloplay?
+Built with **Quarkus**, **LangChain4j**, **Ollama** (local LLM), and **Neo4j** (graph database + vector storage).
 
-Soloplay helps you play tabletop RPGs solo by providing an AI game master assistant that:
+---
 
-- **Manages your campaign story** - Track characters, locations, events, and relationships in a graph database
-- **Answers lore questions** - RAG (Retrieval Augmented Generation) queries against your uploaded campaign documents
-- **Provides AI chat** - Interactive conversations with an AI assistant that has access to your story data
-- **Uses AI tools** - The AI can create/update characters, locations, and events as the story unfolds
+## What This Demonstrates
 
-### Key Features
+This application shows four levels of LLM integration, each building on the last:
 
-**Story Management:**
-- Create and track characters with flexible tag-based classification (NPCs, companions, quest-givers, etc.)
-- Manage locations with relationships to characters and events
-- Record story events and their connections to the narrative
-- Model character relationships with multi-dimensional tags (ally, friend, trusts, etc.)
+### Level 1 — Plain Chat (`/chat`)
 
-**Document Ingestion:**
-- Upload campaign setting documents (markdown with YAML frontmatter)
-- Automatic text chunking and embedding generation
-- Vector storage in Neo4j for semantic search
+A single `@RegisterAiService` interface with an inline system prompt. No memory, no tools —
+the simplest possible LangChain4j integration.
 
-**RAG-Powered Queries:**
-- Ask questions about your campaign lore
-- AI retrieves relevant passages from your documents
-- Answers grounded in your source material
+**Key source:**
 
-**AI Tools Integration:**
-- AI can autonomously create/update story elements
-- Tools for character management, location tracking, and event recording
-- Searchable story graph with tag-based queries
+- [`ChatAssistant`](src/main/java/dev/ebullient/soloplay/ai/ChatAssistant.java) — the AI service interface
+- [`ChatResource`](src/main/java/dev/ebullient/soloplay/api/ChatResource.java) — REST endpoint at `/api/chat`
 
-## Quick Start
+### Level 2 — Guided Character Creation (`/play/{gameId}`)
+
+Session memory via `@MemoryId`, structured JSON output with guardrails, and a multi-turn
+conversation that extracts character details across several stages.
+
+**Key source:**
+
+- [`ActorCreationAssistant`](src/main/java/dev/ebullient/soloplay/play/ActorCreationAssistant.java) — AI service with session memory and structured extraction
+- [`ActorCreationEngine`](src/main/java/dev/ebullient/soloplay/play/ActorCreationEngine.java) — orchestrates the multi-stage creation flow
+
+### Level 3 — Lore Queries with RAG (`/lore`)
+
+Retrieval-augmented generation: vector similarity search against ingested campaign documents,
+with AI tools for cross-reference resolution.
+
+The document ingestion pipeline (`/ingest`) prepares the knowledge base: upload markdown
+with YAML frontmatter → chunk → embed with nomic-embed-text → store in Neo4j vector index.
+
+**Key source:**
+
+- [`LoreAssistant`](src/main/java/dev/ebullient/soloplay/ai/LoreAssistant.java) — RAG-enabled AI service
+- [`LoreRetriever`](src/main/java/dev/ebullient/soloplay/ai/LoreRetriever.java) — `RetrievalAugmentor` supplier for Neo4j vector search
+- [`LoreTools`](src/main/java/dev/ebullient/soloplay/ai/LoreTools.java) — AI tools: document retrieval and semantic search
+- [`IngestService`](src/main/java/dev/ebullient/soloplay/IngestService.java) — document parsing, chunking, and embedding pipeline
+
+### Level 4 — Full Gameplay (`/play/{gameId}`)
+
+Full orchestration: a system prompt plus four context-specific user-message prompt resources,
+session memory, LoreTools + GameTools, and a WebSocket transport for interactive play.
+The model calls tools to query both lore and live game state each turn.
+
+**Key source:**
+
+- [`GamePlayAssistant`](src/main/java/dev/ebullient/soloplay/play/GamePlayAssistant.java) — AI service with tools, memory, and structured output
+- [`GamePlayEngine`](src/main/java/dev/ebullient/soloplay/play/GamePlayEngine.java) — routes turns through scene start, recap, action, and roll resolution prompts
+- [`GameTools`](src/main/java/dev/ebullient/soloplay/play/GameTools.java) — AI tools: story recap, actor lookup, location lookup
+- [`PlayWebSocket`](src/main/java/dev/ebullient/soloplay/play/PlayWebSocket.java) — WebSocket at `/ws/play/{gameId}` for interactive play
+
+---
+
+## Application Routes
+
+| Route | Description |
+| ----- | ----------- |
+| `/` | Landing page — links to all sections |
+| `/chat` | Level 1: Plain chat with the LLM |
+| `/lore` | Level 3: Lore queries with RAG |
+| `/ingest` | Document upload and ingestion management |
+| `/game` | Game list; create new games |
+| `/play/{gameId}` | Levels 2 + 4: Character creation → active gameplay |
+| `/inspect/{gameId}` | View game state and turn history |
+| `/party/{gameId}` | Manage party members |
+
+---
+
+## Running the Demo
 
 ### Prerequisites
 
-1. **Java 21** or later
-2. **Ollama** with required models:
-   ```bash
-   ollama pull mistral-nemo:12b
-   ollama pull nomic-embed-text
-   ```
-3. **Neo4j** database (Docker recommended):
-   ```bash
-   docker run -d \
-     --name neo4j \
-     -p 7474:7474 -p 7687:7687 \
-     -e NEO4J_AUTH=neo4j/password \
-     neo4j:latest
-   ```
+**Ollama** (local LLM):
 
-### Running
+```shell
+ollama serve
+ollama pull llama3.2           # default chat model
+ollama pull nomic-embed-text   # embeddings
+```
 
-```bash
-# Start in dev mode with live reload
+The default model (`llama3.2`) works for levels 1 and 2. For tool calling at levels 3 and 4,
+a larger model is recommended. Override via `.env` in the project root:
+
+```shell
+QUARKUS_LANGCHAIN4J_OLLAMA_CHAT_MODEL_MODEL_NAME=qwen3:14b
+```
+
+**Neo4j** (graph database + vector store):
+
+```shell
+docker compose up -d neo4j
+```
+
+### Start the application
+
+```shell
 ./mvnw quarkus:dev
 ```
 
-The application will be available at:
-- Main UI: <http://localhost:8080>
-- Dev UI: <http://localhost:8080/q/dev/>
+Open [http://localhost:8080](http://localhost:8080).
 
-### First Steps
+---
 
-1. Navigate to the ingestion page to upload campaign documents
-2. Use the lore query interface to ask questions about your setting
-3. Start a chat session and let the AI create characters and locations as you play
+## Project Structure
 
-## Use Cases
-
-**Solo RPG Play:**
-- Use as a GM assistant for solo campaigns
-- Let the AI track NPCs, locations, and plot threads
-- Query your campaign lore during play
-- Generate responses to player actions
-
-**Campaign Preparation:**
-- Upload setting documents and let the AI answer questions
-- Build a graph of campaign elements before play
-- Explore relationships between characters and locations
-
-**Worldbuilding:**
-- Maintain consistency across large campaign settings
-- Track evolving character relationships
-- Record events and their narrative impact
-
-## Technology Stack
-
-Built with Quarkus, LangChain4j, Ollama (local LLM), and Neo4j (graph database + vector storage).
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed architecture, API documentation, and development setup.
-
-## Contributing
-
-Contributions welcome! This project supports AI-assisted development.
-
-- Read [CONTRIBUTING.md](CONTRIBUTING.md) for architecture and patterns
-- Read [CLAUDE.md](CLAUDE.md) for AI assistant working guidelines
-- Requires Ollama and Neo4j running locally for testing
-- Quality and understanding matter more than the tools used
-
-## License
-
-This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
-
-## Learn More
-
-- [Quarkus](https://quarkus.io/)
-- [LangChain4j](https://docs.langchain4j.dev/)
-- [Ollama](https://ollama.ai/)
-- [Neo4j](https://neo4j.com/)
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for architecture details, API reference,
+build commands, and contributor guidelines.
