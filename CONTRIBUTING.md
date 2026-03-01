@@ -238,43 +238,22 @@ Quarkus configuration follows standard patterns:
 
 ```
 src/main/java/dev/ebullient/soloplay/
-├── ai/                        # AI/LangChain4j components (assistants, retrieval, tools)
-│   ├── ChatAssistant.java     # Basic chat assistant
-│   ├── LoreAssistant.java     # RAG lore assistant
-│   ├── LoreRetriever.java     # RetrievalAugmentor supplier
-│   ├── LoreTools.java         # Tool: retrieve ingested docs by filename
-│   └── memory/                # Chat memory persistence (Neo4j)
-├── api/                       # REST API endpoints (Quarkus REST)
-│   ├── ChatResource.java      # /api/chat
-│   ├── LoreResource.java      # /api/lore
-│   └── GameResource.java      # /api/game
-├── play/                      # Solo play engine + websocket transport
-│   ├── GameEngine.java        # Phase routing + command handling
-│   ├── ActorCreationEngine.java
-│   ├── GamePlayEngine.java
-│   ├── GameTools.java         # AI tools for game state lookup
-│   └── PlayWebSocket.java     # /ws/play/{gameId}
-├── play/model/                # Neo4j OGM entities + patch/draft models
-├── health/                    # Health checks (e.g., Neo4j availability)
-├── ollama/                    # Optional REST client for Ollama API
-├── web/                       # Web UI controllers (Renarde MVC)
-├── IngestService.java         # Document ingestion & embeddings
-├── GameRepository.java        # Game state persistence (Neo4j OGM)
-├── LoreRepository.java        # Lore queries (documents/adventures)
-└── StringUtils.java           # Shared string normalization/helpers
+├── ai/                  # AI services, tools, retrieval, guardrails
+│   └── memory/          # Chat memory store + compaction (Neo4j)
+├── api/                 # REST endpoints: ChatResource, LoreResource, GameResource
+├── health/              # Health checks (Neo4j, Ollama)
+├── ollama/              # Optional REST client for Ollama API
+├── play/                # Game engines, assistants, tools, WebSocket transport
+│   └── model/           # Neo4j OGM entities, patches, and draft models
+├── web/                 # Renarde MVC controllers (page routing, forms)
+├── GameRepository.java  # Game state persistence (Neo4j OGM)
+├── IngestService.java   # Document parsing, chunking, and embedding pipeline
+├── LoreRepository.java  # Lore/document queries
+└── ...                  # Supporting classes (StringUtils, MarkdownDocumentParser, etc.)
 src/main/resources/
-├── META-INF/resources         # static resources (Renarde front-end)
-└── templates                  # Qute templates for Renarde views and tool responses
+├── META-INF/resources/  # Static assets: vanilla JS modules, CSS, images
+└── templates/           # Qute templates for Renarde views and AI prompt fragments
 ```
-
-**Key Directories:**
-- `ai/` - LangChain4j AI services and tools (assistants, tools, retrievers)
-- `api/` - REST API endpoints using Quarkus REST
-- `play/` - Game engines, tools, and WebSocket transport
-- `play/model/` - Neo4j OGM entities and JSON patch/draft models
-- `health/` - Health checks for dependencies (Neo4j, etc.)
-- `ollama/` - Optional REST client for direct Ollama API calls
-- `web/` - Web UI controllers using Renarde MVC
 
 ## API Reference
 

@@ -111,7 +111,35 @@ Open [http://localhost:8080](http://localhost:8080).
 
 ---
 
-## Project Structure
+## Frontend: Renarde + Vanilla JS
+
+The UI is server-rendered with [Renarde](https://docs.quarkiverse.io/quarkus-renarde/dev/index.html)
+(Qute templates, type-safe routing, flash scope) and driven entirely by vanilla JavaScript — no
+frontend framework, no build step.
+
+**Renarde controllers** handle page routing, form submissions, and redirects:
+
+- [`Game`](src/main/java/dev/ebullient/soloplay/web/Game.java) — CRUD forms with flash-scope feedback
+- [`Play`](src/main/java/dev/ebullient/soloplay/web/Play.java) — serves the play page with a `data-game-id` attribute for JS to pick up
+- [`Lore`](src/main/java/dev/ebullient/soloplay/web/Lore.java) — multipart file upload for document ingestion (CSRF-protected with `{#authenticityToken/}`)
+
+**Vanilla JS modules** add client-side interactivity:
+
+| Module | What it does |
+| ------ | ------------ |
+| [`play-interface.js`](src/main/resources/META-INF/resources/play-interface.js) | WebSocket streaming chat — reconnection, message buffering, choice buttons |
+| [`chat-interface.js`](src/main/resources/META-INF/resources/chat-interface.js) | Simple fetch-based chat for `/chat` and `/lore` |
+| [`game-index.js`](src/main/resources/META-INF/resources/game-index.js) | Game list — info/delete modals via REST calls |
+| [`inspect.js`](src/main/resources/META-INF/resources/inspect.js) | Developer tool: browse game-state JSON from `/api/game` endpoints |
+
+The REST API under `/api/` ([`GameResource`](src/main/java/dev/ebullient/soloplay/api/GameResource.java),
+[`ChatResource`](src/main/java/dev/ebullient/soloplay/api/ChatResource.java),
+[`LoreResource`](src/main/java/dev/ebullient/soloplay/api/LoreResource.java)) provides
+the JSON and HTML-fragment responses consumed by these scripts.
+
+---
+
+## Contributing
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for architecture details, API reference,
 build commands, and contributor guidelines.

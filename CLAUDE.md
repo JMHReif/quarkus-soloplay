@@ -1,6 +1,7 @@
 # AI Assistant Guidelines
 
-**For architecture, build commands, and API reference, see [CONTRIBUTING.md](CONTRIBUTING.md).**
+**Read [README.md](README.md) first for what this app demonstrates and how its frontend works.
+For architecture, build commands, and API reference, see [CONTRIBUTING.md](CONTRIBUTING.md).**
 
 ## Your Role
 
