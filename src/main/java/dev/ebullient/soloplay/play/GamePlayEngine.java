@@ -140,8 +140,8 @@ public class GamePlayEngine {
 
         rollHandler.clearPendingRoll(game);
 
-        // Send the roll result to chat immediately so player sees their roll
-        var rollResultEffect = new GameEffect.HtmlFragment("roll_result", rollResult.render());
+        // Send the roll result to chat immediately so player sees it before narration
+        emitter.emitEffect(new GameEffect.HtmlFragment("roll_result", rollResult.render()));
 
         String adventureContext = fetchAdventureContext(game);
 
@@ -154,15 +154,10 @@ public class GamePlayEngine {
                 adventureContext,
                 formatJournal(game));
 
-        return processResponse(game, response, emitter, rollResultEffect);
+        return processResponse(game, response, emitter);
     }
 
     private GameResponse processResponse(GameState game, GamePlayResponse response, GameEventEmitter emitter) {
-        return processResponse(game, response, emitter, null);
-    }
-
-    private GameResponse processResponse(GameState game, GamePlayResponse response, GameEventEmitter emitter,
-            GameEffect additionalEffect) {
         if (response == null) {
             Log.errorf("Assistant returned null response for game %s", game.getGameId());
             return GameResponse.error("No response from GM");
@@ -199,9 +194,6 @@ public class GamePlayEngine {
 
         // Collect all effects
         java.util.List<GameEffect> effects = new java.util.ArrayList<>();
-        if (additionalEffect != null) {
-            effects.add(additionalEffect);
-        }
         if (pendingRollEffect != null) {
             effects.add(pendingRollEffect);
         }

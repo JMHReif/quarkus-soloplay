@@ -166,7 +166,20 @@ public class PlayWebSocket {
             broadcastToGameId(new PlayWsServerMessage.UserEcho(connection.id(), playerInput));
             broadcastToGameId(new PlayWsServerMessage.AssistantStart(assistantId));
 
-            GameEventEmitter emitter = text -> broadcastToGameId(new PlayWsServerMessage.AssistantDelta(assistantId, text));
+            GameEventEmitter emitter = new GameEventEmitter() {
+                @Override
+                public void assistantDelta(String text) {
+                    broadcastToGameId(new PlayWsServerMessage.AssistantDelta(assistantId, text));
+                }
+
+                @Override
+                public void emitEffect(GameEffect effect) {
+                    PlayWsServerMessage outbound = toServerMessage(effect);
+                    if (outbound != null) {
+                        broadcastToGameId(outbound);
+                    }
+                }
+            };
             GameResponse response = gameEngine.processRequest(gameState, playerInput, emitter, resuming);
 
             if (response instanceof GameResponse.Error error) {
