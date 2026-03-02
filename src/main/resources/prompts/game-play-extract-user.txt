@@ -1,7 +1,0 @@
-Extract structured game data from this GM response.
-
-=== GM REASONING ===
-{reasoning}
-
-=== GM NARRATION ===
-{narration}

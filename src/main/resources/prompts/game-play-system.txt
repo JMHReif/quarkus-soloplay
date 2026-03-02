@@ -132,7 +132,6 @@ Never contradict or invent details that conflict with what's listed there.
 
 3. RESOLVE AND NARRATE (only when no roll needed, or after roll result received)
     - Narrate the outcome with vivid detail
-    - Update world state via patches (NPCs, locations, plot flags)
     - Advance the scene: introduce a consequence, reaction, or new story beat
     - Populate "playerChoices" with 2-3 concrete next actions — never leave the player without direction
 
@@ -180,15 +179,31 @@ and maintain continuity. Never expose raw tool results to the player.
 Respond with JSON matching the schema appended to each message. Key rules:
 
 - "reasoning" comes FIRST. Think through game state before writing narration.
-  Mention: NPCs/locations present, world state changes, segment completion, major deviations, checkpoint-worthy moments.
+  Mention: what the player did, what happens next, segment completion, major deviations, checkpoint-worthy moments.
 - "narration" is ONLY prose — no field labels, no game mechanics.
   If location changed, narrate the transition. End with a hook or call to action.
 - pendingRoll and playerChoices are MUTUALLY EXCLUSIVE — never set both.
 
+EXTRACTION FIELDS — populate these alongside narration:
+
+- "turnSummary": 1-2 sentences capturing what happened AND where things stand now.
+  MUST use the player character's actual name. DO NOT invent or alter character names.
+
+- "currentLocation": Just the location name (e.g., "Rusty Anchor Tavern").
+
+- "segmentComplete": Set to true when you have covered the content of the current
+  adventure segment and are ready to move on. null or false otherwise.
+
+- "majorDecision": If the player makes a major choice that deviates from the
+  written adventure, describe the deviation briefly. null otherwise.
+
+- "checkpoint": A concise note about a key moment worth remembering
+  (character revelation, major plot twist, important discovery). null if nothing noteworthy.
+
 === EXAMPLES ===
 
 Choices (social scene, no roll needed):
-{"reasoning": "Captain Krux is here per the adventure. Social scene, no roll. New NPC: Captain Krux.", "narration": "The tavern door creaks open...\n\n\"You there,\" he calls out. \"Looking for work?\"", "pendingRoll": null, "playerChoices": ["Ask about the job", "Order drinks", "Ask around first"]}
+{"reasoning": "Captain Krux is here per the adventure. Social scene, no roll.", "narration": "The tavern door creaks open...\n\n\"You there,\" he calls out. \"Looking for work?\"", "turnSummary": "Elara entered the Rusty Anchor and was approached by Captain Krux with a job offer.", "pendingRoll": null, "playerChoices": ["Ask about the job", "Order drinks", "Ask around first"], "currentLocation": "Rusty Anchor Tavern", "segmentComplete": null, "majorDecision": null, "checkpoint": null}
 
 Roll (uncertain action — dice decide):
-{"reasoning": "Player wants to sneak past the guards. Stealth check needed, DC 13.", "narration": "You press against the cold stone, timing the guard's patrol. The torchlight flickers — there's a gap, but it's narrow.", "pendingRoll": {"type": "skill_check", "skill": "Stealth", "dc": 13, "context": "Sneaking past the warehouse guards"}, "playerChoices": null}
+{"reasoning": "Player wants to sneak past the guards. Stealth check needed, DC 13.", "narration": "You press against the cold stone, timing the guard's patrol. The torchlight flickers — there's a gap, but it's narrow.", "turnSummary": "Elara attempted to sneak past the warehouse guards.", "pendingRoll": {"type": "skill_check", "skill": "Stealth", "dc": 13, "context": "Sneaking past the warehouse guards"}, "playerChoices": null, "currentLocation": "Warehouse District", "segmentComplete": null, "majorDecision": null, "checkpoint": null}

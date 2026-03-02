@@ -14,14 +14,14 @@ import io.quarkiverse.langchain4j.RegisterAiService;
 
 @SystemMessage(fromResource = "prompts/game-play-system.txt")
 @RegisterAiService(tools = { LoreTools.class, GameTools.class })
-@OutputGuardrails(GamePlayNarrationGuardrail.class)
+@OutputGuardrails(GamePlayResponseGuardrail.class)
 @SessionScoped
 public interface GamePlayAssistant {
 
     // --- Scene Start: First scene of the adventure ---
 
     @UserMessage(fromResource = "prompts/game-play-scene-start.txt")
-    GamePlayNarration sceneStart(
+    GamePlayResponse sceneStart(
             @MemoryId String gameId,
             String adventureName,
             List<String> theParty,
@@ -31,7 +31,7 @@ public interface GamePlayAssistant {
     // --- Recap: Resuming a session ---
 
     @UserMessage(fromResource = "prompts/game-play-recap.txt")
-    GamePlayNarration recap(
+    GamePlayResponse recap(
             @MemoryId String gameId,
             String adventureName,
             List<String> theParty,
@@ -43,7 +43,7 @@ public interface GamePlayAssistant {
     // --- Standard Turn: Player action (no pending roll) ---
 
     @UserMessage(fromResource = "prompts/game-play-turn.txt")
-    GamePlayNarration turn(
+    GamePlayResponse turn(
             @MemoryId String gameId,
             String adventureName,
             List<String> theParty,
@@ -55,7 +55,7 @@ public interface GamePlayAssistant {
     // --- Roll Resolution: Player completed a roll ---
 
     @UserMessage(fromResource = "prompts/game-play-roll.txt")
-    GamePlayNarration resolveRoll(
+    GamePlayResponse resolveRoll(
             @MemoryId String gameId,
             String adventureName,
             List<String> theParty,

@@ -1,6 +1,5 @@
 package dev.ebullient.soloplay.play;
 
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -9,8 +8,6 @@ import java.util.Set;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import dev.ebullient.soloplay.GameRepository;
 import dev.ebullient.soloplay.play.GameEffect.HtmlFragment;
 import dev.ebullient.soloplay.play.model.Actor;
@@ -18,7 +15,6 @@ import dev.ebullient.soloplay.play.model.BaseEntity;
 import dev.ebullient.soloplay.play.model.Event;
 import dev.ebullient.soloplay.play.model.GameState;
 import dev.ebullient.soloplay.play.model.Location;
-import dev.ebullient.soloplay.play.model.Patch;
 import dev.ebullient.soloplay.play.model.PendingRoll;
 import dev.ebullient.soloplay.play.model.PlayerActor;
 import dev.ebullient.soloplay.play.model.PlayerChoices;
@@ -33,12 +29,6 @@ public class GamePlayEngine {
 
     @Inject
     GamePlayAssistant assistant;
-
-    @Inject
-    GamePlayExtractor extractor;
-
-    @Inject
-    ObjectMapper objectMapper;
 
     @Inject
     RollHandler rollHandler;
@@ -66,14 +56,14 @@ public class GamePlayEngine {
                 Log.infof("sceneStart: no adventure set (sandbox mode)");
             }
 
-            var narration = assistant.sceneStart(
+            var response = assistant.sceneStart(
                     game.getGameId(),
                     game.getAdventureName(),
                     listTheParty(game),
                     adventureContext,
                     formatJournal(game));
 
-            return processResponse(game, narrateThenExtract(narration, emitter), emitter);
+            return processResponse(game, response, emitter);
         } catch (Exception e) {
             return handleAssistantError(e);
         }
@@ -85,7 +75,7 @@ public class GamePlayEngine {
         try {
             String adventureContext = fetchAdventureContext(game);
 
-            var narration = assistant.recap(
+            var response = assistant.recap(
                     game.getGameId(),
                     game.getAdventureName(),
                     listTheParty(game),
@@ -94,7 +84,7 @@ public class GamePlayEngine {
                     adventureContext,
                     formatJournal(game));
 
-            return processResponse(game, narrateThenExtract(narration, emitter), emitter);
+            return processResponse(game, response, emitter);
         } catch (Exception e) {
             return handleAssistantError(e);
         }
@@ -127,7 +117,7 @@ public class GamePlayEngine {
         Log.debugf("handleTurn: adventureContext=%s",
                 adventureContext != null ? "present (" + adventureContext.length() + " chars)" : "null");
 
-        var narration = assistant.turn(
+        var response = assistant.turn(
                 game.getGameId(),
                 game.getAdventureName(),
                 listTheParty(game),
@@ -136,7 +126,7 @@ public class GamePlayEngine {
                 adventureContext,
                 formatJournal(game));
 
-        return processResponse(game, narrateThenExtract(narration, emitter), emitter);
+        return processResponse(game, response, emitter);
     }
 
     private GameResponse resolveRoll(GameState game, PendingRoll pending, String rollInput,
@@ -155,7 +145,7 @@ public class GamePlayEngine {
 
         String adventureContext = fetchAdventureContext(game);
 
-        var narration = assistant.resolveRoll(
+        var response = assistant.resolveRoll(
                 game.getGameId(),
                 game.getAdventureName(),
                 listTheParty(game),
@@ -164,35 +154,7 @@ public class GamePlayEngine {
                 adventureContext,
                 formatJournal(game));
 
-        return processResponse(game, narrateThenExtract(narration, emitter), emitter, rollResultEffect);
-    }
-
-    /**
-     * Two-step LLM: merge Step 1 narration (creative decisions) with Step 2 extraction (structured data).
-     * pendingRoll and playerChoices come from Step 1; all other fields from Step 2.
-     */
-    private GamePlayResponse narrateThenExtract(GamePlayNarration narration, GameEventEmitter emitter) {
-        Log.debugf("Step 1 reasoning: %s", narration.reasoning());
-        Log.debugf("Step 1 narration length: %d chars",
-                narration.narration() != null ? narration.narration().length() : 0);
-
-        emitter.assistantDelta("Extracting world state…\n");
-        GamePlayResponse extracted = extractor.extract(narration.narration(), narration.reasoning());
-
-        // Merge: creative decisions from Step 1, extracted data from Step 2
-        return new GamePlayResponse(
-                narration.narration(),
-                extracted.turnSummary(),
-                narration.pendingRoll(),
-                narration.playerChoices(),
-                extracted.patches(),
-                extracted.currentLocation(),
-                extracted.actorsPresent(),
-                extracted.locationsPresent(),
-                extracted.sources(),
-                extracted.segmentComplete(),
-                extracted.majorDecision(),
-                extracted.checkpoint());
+        return processResponse(game, response, emitter, rollResultEffect);
     }
 
     private GameResponse processResponse(GameState game, GamePlayResponse response, GameEventEmitter emitter) {
@@ -348,75 +310,13 @@ public class GamePlayEngine {
     }
 
     private void patchesAndEvents(GameState game, GamePlayResponse response) {
-        Set<BaseEntity> modified = new HashSet<>();
-        Set<Actor> actors = new HashSet<>();
-        Set<Location> locations = new HashSet<>();
-
-        if (response.patches() != null) {
-            for (Patch patch : response.patches()) {
-                switch (patch.type()) {
-                    case "actor" -> {
-                        var merged = handleActor(game, patch);
-                        actors.add(merged);
-                    }
-                    case "location" -> {
-                        var merged = handleLocation(game, patch);
-                        locations.add(merged);
-                    }
-                }
-            }
-        }
-
-        if (response.actorsPresent() != null) {
-            for (var actorName : response.actorsPresent()) {
-                var actor = gameRepository.findActorByNameOrAlias(game.getGameId(), actorName);
-                if (actor != null) {
-                    actors.add(actor);
-                }
-            }
-        }
-        if (response.locationsPresent() != null) {
-            for (var locationName : response.locationsPresent()) {
-                var location = gameRepository.findLocationByNameOrAlias(game.getGameId(), locationName);
-                if (location != null) {
-                    locations.add(location);
-                }
-            }
-        }
-
         // Save turn summary as event for recaps
         if (response.turnSummary() != null && !response.turnSummary().isBlank()) {
             Event event = new Event(game.getGameId(), game.getTurnNumber(), response.turnSummary());
-            event.addParticipants(actors);
-            event.addLocations(locations);
-            modified.add(event);
+            Set<BaseEntity> modified = Set.of(event);
+            gameRepository.saveAll(modified);
+            gameRepository.linkEntitiesToGame(game.getGameId(), modified);
         }
-
-        modified.addAll(actors);
-        modified.addAll(locations);
-
-        gameRepository.saveAll(modified); // single TX
-        gameRepository.linkEntitiesToGame(game.getGameId(), modified);
-    }
-
-    Actor handleActor(GameState game, Patch p) {
-        var actor = gameRepository.findActorByNameOrAlias(game.getGameId(), p.name());
-        if (actor == null) {
-            return new Actor(game.getGameId(), p);
-        }
-        if (actor instanceof PlayerActor playerActor) {
-            // preserve extra player actor attributes
-            return playerActor.merge(p);
-        }
-        return actor.merge(p);
-    }
-
-    Location handleLocation(GameState game, Patch p) {
-        var location = gameRepository.findLocationByNameOrAlias(game.getGameId(), p.name());
-        if (location == null) {
-            return new Location(game.getGameId(), p);
-        }
-        return location.merge(p);
     }
 
     List<String> listTheParty(GameState game) {

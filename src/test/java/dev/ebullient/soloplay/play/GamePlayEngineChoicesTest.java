@@ -28,9 +28,6 @@ class GamePlayEngineChoicesTest {
     @InjectMock
     GamePlayAssistant assistant;
 
-    @InjectMock
-    GamePlayExtractor extractor;
-
     @Test
     void choicesCreateHtmlFragmentEffect() {
         String gameId = "test-game";
@@ -42,7 +39,6 @@ class GamePlayEngineChoicesTest {
         Mockito.when(gameRepository.findTheParty(gameId)).thenReturn(List.of());
         Mockito.when(gameRepository.getCheckpoints(gameId)).thenReturn(List.of());
 
-        // Step 1: assistant returns narration with creative decisions
         Mockito.when(assistant.turn(
                 Mockito.eq(gameId),
                 Mockito.any(),
@@ -51,26 +47,13 @@ class GamePlayEngineChoicesTest {
                 Mockito.any(),
                 Mockito.any(),
                 Mockito.any()))
-                .thenReturn(new GamePlayNarration(
-                        "Player wants to explore. No roll needed.",
-                        "narration",
-                        null,
-                        List.of("Choice A", "Choice B")));
-
-        // Step 2: extractor returns full structured response
-        Mockito.when(extractor.extract(
-                Mockito.eq("narration"),
-                Mockito.any()))
                 .thenReturn(new GamePlayResponse(
+                        "Player wants to explore. No roll needed.",
                         "narration",
                         "summary",
                         null,
-                        List.of(),
-                        null,
+                        List.of("Choice A", "Choice B"),
                         "Somewhere",
-                        List.of(),
-                        List.of(),
-                        List.of(),
                         null,
                         null,
                         null));
