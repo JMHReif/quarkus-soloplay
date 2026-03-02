@@ -18,7 +18,8 @@ public class GamePlayNarrationGuardrail implements OutputGuardrail {
 
     public static final String REPROMPT_PROMPT = "Do NOT call any tools. Respond ONLY with a JSON object. "
             + "Required fields: \"reasoning\" (your thinking), \"narration\" (story text). "
-            + "Optional fields: \"pendingRoll\" (if a dice roll is needed), \"playerChoices\" (array of suggested actions). "
+            + "You MUST also include exactly ONE of: \"pendingRoll\" (if a dice roll is needed) "
+            + "or \"playerChoices\" (array of 2-3 suggested actions). Never omit both. "
             + "Do not acknowledge this correction.";
 
     @Inject
@@ -53,11 +54,26 @@ public class GamePlayNarrationGuardrail implements OutputGuardrail {
             }
             boolean hasRoll = narration.pendingRoll() != null;
             boolean hasChoices = narration.playerChoices() != null && !narration.playerChoices().isEmpty();
+
+            // Auto-fix: if both are set, use reasoning to decide which to keep.
+            // If the model mentioned a DC in its reasoning, it intended a roll — keep the roll.
+            // Otherwise, keep choices (the model resolved the action and moved on).
             if (hasRoll && hasChoices) {
-                return reprompt("Offer only a roll or a choice of actions, not both. "
-                        + "If a roll is needed, set pendingRoll and leave playerChoices as an empty array. "
-                        + "If no roll is needed, set playerChoices with 2-3 options and leave pendingRoll null.",
-                        REPROMPT_PROMPT);
+                boolean reasoningMentionsDC = narration.reasoning() != null
+                        && DC_PATTERN.matcher(narration.reasoning()).find();
+                if (reasoningMentionsDC) {
+                    Log.debugf("NarrationGuardrail: both set, reasoning mentions DC — keeping roll, dropping choices");
+                    narration = new GamePlayNarration(
+                            narration.reasoning(), narration.narration(),
+                            narration.pendingRoll(), null);
+                } else {
+                    Log.debugf("NarrationGuardrail: both set, no DC in reasoning — keeping choices, dropping roll");
+                    narration = new GamePlayNarration(
+                            narration.reasoning(), narration.narration(),
+                            null, narration.playerChoices());
+                }
+                String fixed = objectMapper.writeValueAsString(narration);
+                return OutputGuardrailResult.successWith(fixed, narration);
             }
             if (!hasRoll && !hasChoices) {
                 return reprompt("Every response MUST include either a pendingRoll or playerChoices. "
@@ -71,6 +87,9 @@ public class GamePlayNarrationGuardrail implements OutputGuardrail {
             return reprompt(REPROMPT_MESSAGE, e, REPROMPT_PROMPT);
         }
     }
+
+    private static final java.util.regex.Pattern DC_PATTERN = java.util.regex.Pattern.compile(
+            "(?i)\\bDC\\s*\\d+");
 
     private static final java.util.regex.Pattern FIELD_LABEL_PATTERN = java.util.regex.Pattern.compile(
             "(?i)(Reasoning|PendingRoll|PlayerChoices)\\s*:");
