@@ -69,10 +69,7 @@ public class EventPersistenceTest {
         assertTrue(actor.isDirty());
 
         assertEquals(1, event.getLocations().size());
-        assertEquals(1, location.getEvents().size());
-
         assertEquals(1, event.getParticipants().size());
-        assertEquals(1, actor.getEvents().size());
 
         gameRepository.saveAll(new HashSet<>(List.of(event, location, actor)));
 

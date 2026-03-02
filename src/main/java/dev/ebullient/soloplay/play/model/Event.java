@@ -6,7 +6,6 @@ import java.util.Set;
 
 import org.neo4j.ogm.annotation.Id;
 import org.neo4j.ogm.annotation.NodeEntity;
-import org.neo4j.ogm.annotation.Relationship;
 
 import io.quarkus.qute.CheckedTemplate;
 import io.quarkus.qute.TemplateInstance;
@@ -26,10 +25,7 @@ public class Event extends BaseEntity implements Stash {
     private String summary; // Brief description of what happened (from turnSummary)
     private Integer turnNumber; // Game turn when this occurred
 
-    @Relationship(type = "PARTICIPATED_IN", direction = Relationship.Direction.INCOMING)
     private Set<Actor> participants;
-
-    @Relationship(type = "OCCURRED_AT", direction = Relationship.Direction.OUTGOING)
     private Set<Location> locations;
 
     public Event() {
@@ -74,7 +70,6 @@ public class Event extends BaseEntity implements Stash {
 
     public void addParticipant(Actor actor) {
         if (participants.add(actor)) {
-            actor.addEvent(this);
             markDirty();
         }
     }
@@ -85,7 +80,6 @@ public class Event extends BaseEntity implements Stash {
 
     public void removeParticipant(Actor actor) {
         if (participants.remove(actor)) {
-            actor.removeEvent(this);
             markDirty();
         }
     }
@@ -96,7 +90,6 @@ public class Event extends BaseEntity implements Stash {
 
     public void addLocation(Location location) {
         if (locations.add(location)) {
-            location.addEvent(this);
             markDirty();
         }
     }
@@ -107,7 +100,6 @@ public class Event extends BaseEntity implements Stash {
 
     public void removeLocation(Location location) {
         if (locations.remove(location)) {
-            location.removeEvent(this);
             markDirty();
         }
     }
