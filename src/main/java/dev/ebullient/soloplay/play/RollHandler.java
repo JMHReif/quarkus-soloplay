@@ -166,7 +166,7 @@ public class RollHandler {
      * Store a pending roll in GameState stash and return an HtmlFragment effect.
      */
     public Optional<HtmlFragment> setPendingRoll(GameState game, PendingRoll roll) {
-        if (roll == null) {
+        if (roll == null || roll.type() == null) {
             return Optional.empty();
         }
         PendingRollStash stash = PendingRollStash.from(roll);
