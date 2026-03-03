@@ -76,7 +76,7 @@ public class IngestService {
             int processedCount = 0;
             for (String part : parts) {
                 String trimmed = part.trim();
-                if (!trimmed.isBlank() && !trimmed.equals("============")) {
+                if (!trimmed.isBlank() && !trimmed.equals(TOOLS_DOC_SEPARATOR)) {
                     List<String> chunkIds = processStructuredMarkdown(filename, trimmed, globalSequence, isAdventureFile);
                     allChunkIds.addAll(chunkIds);
                     processedCount++;
