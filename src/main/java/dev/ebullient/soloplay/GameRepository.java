@@ -331,15 +331,18 @@ public class GameRepository {
                     OPTIONAL MATCH (g)-[old:CURRENT_STEP]->()
                     DELETE old
                     WITH g
-                    CREATE (gs:GameSegment {
-                        id: $segmentId,
-                        gameId: $gameId,
-                        documentId: $documentId,
-                        status: 'current',
-                        startTurnNumber: $turnNumber,
-                        createdAt: $now
-                    })
-                    CREATE (g)-[:CURRENT_STEP]->(gs)
+                    MERGE (gs:GameSegment {id: $segmentId})
+                    ON CREATE SET
+                        gs.gameId = $gameId,
+                        gs.documentId = $documentId,
+                        gs.status = 'current',
+                        gs.startTurnNumber = $turnNumber,
+                        gs.createdAt = $now
+                    ON MATCH SET
+                        gs.documentId = $documentId,
+                        gs.status = 'current',
+                        gs.startTurnNumber = $turnNumber
+                    MERGE (g)-[:CURRENT_STEP]->(gs)
                     """;
             session.query(cypher, Map.of(
                     "gameId", gameId,
@@ -380,8 +383,16 @@ public class GameRepository {
      */
     public boolean advanceAdventureSegment(String gameId, int turnNumber) {
         var session = sessionFactory.openSession();
+        String segmentId = gameId + ":segment-" + (turnNumber + 1);
 
-        // First check if there's a next document
+        // Check if this segment already exists (idempotency guard for retries)
+        var existing = session.query("MATCH (gs:GameSegment {id: $segmentId}) RETURN gs.id",
+                Map.of("segmentId", segmentId));
+        if (existing.iterator().hasNext()) {
+            return true; // already advanced on a previous attempt
+        }
+
+        // Check if there's a next document
         String checkCypher = """
                 MATCH (g:Game {gameId: $gameId})-[:CURRENT_STEP]->(gs:GameSegment)
                 MATCH (d:Document {id: gs.documentId})-[:NEXT]->(nextDoc:Document)
@@ -401,22 +412,25 @@ public class GameRepository {
                     MATCH (g:Game {gameId: $gameId})-[rel:CURRENT_STEP]->(oldGs:GameSegment)
                     SET oldGs.status = 'completed', oldGs.turnNumber = $turnNumber, oldGs.completedAt = $now
                     DELETE rel
-                    CREATE (g)-[:COMPLETED_STEP]->(oldGs)
-                    CREATE (newGs:GameSegment {
-                        id: $segmentId,
-                        gameId: $gameId,
-                        documentId: $nextDocId,
-                        status: 'current',
-                        startTurnNumber: $turnNumber,
-                        createdAt: $now
-                    })
-                    CREATE (g)-[:CURRENT_STEP]->(newGs)
+                    MERGE (g)-[:COMPLETED_STEP]->(oldGs)
+                    MERGE (newGs:GameSegment {id: $segmentId})
+                    ON CREATE SET
+                        newGs.gameId = $gameId,
+                        newGs.documentId = $nextDocId,
+                        newGs.status = 'current',
+                        newGs.startTurnNumber = $turnNumber,
+                        newGs.createdAt = $now
+                    ON MATCH SET
+                        newGs.documentId = $nextDocId,
+                        newGs.status = 'current',
+                        newGs.startTurnNumber = $turnNumber
+                    MERGE (g)-[:CURRENT_STEP]->(newGs)
                     """;
             session.query(cypher, Map.of(
                     "gameId", gameId,
                     "turnNumber", turnNumber,
                     "now", System.currentTimeMillis(),
-                    "segmentId", gameId + ":segment-" + (turnNumber + 1),
+                    "segmentId", segmentId,
                     "nextDocId", nextDocId));
             tx.commit();
         }
@@ -431,16 +445,17 @@ public class GameRepository {
         try (Transaction tx = session.beginTransaction()) {
             String cypher = """
                     MATCH (g:Game {gameId: $gameId})-[:CURRENT_STEP]->(gs:GameSegment)
-                    CREATE (dec:GameSegment {
-                        id: $segmentId,
-                        gameId: $gameId,
-                        documentId: gs.documentId,
-                        status: 'decision',
-                        turnNumber: $turnNumber,
-                        summary: $summary,
-                        createdAt: $now
-                    })
-                    CREATE (g)-[:DECISION]->(dec)
+                    MERGE (dec:GameSegment {id: $segmentId})
+                    ON CREATE SET
+                        dec.gameId = $gameId,
+                        dec.documentId = gs.documentId,
+                        dec.status = 'decision',
+                        dec.turnNumber = $turnNumber,
+                        dec.summary = $summary,
+                        dec.createdAt = $now
+                    ON MATCH SET
+                        dec.summary = $summary
+                    MERGE (g)-[:DECISION]->(dec)
                     """;
             session.query(cypher, Map.of(
                     "gameId", gameId,
@@ -467,15 +482,16 @@ public class GameRepository {
                     OPTIONAL MATCH (first)-[:NEXT_CHECKPOINT*0..]->(tail:GameSegment)
                     WHERE NOT (tail)-[:NEXT_CHECKPOINT]->()
                     WITH g, tail
-                    CREATE (gs:GameSegment {
-                        id: $segmentId,
-                        gameId: $gameId,
-                        status: 'checkpoint',
-                        category: $category,
-                        summary: $content,
-                        turnNumber: $turnNumber,
-                        createdAt: $now
-                    })
+                    MERGE (gs:GameSegment {id: $segmentId})
+                    ON CREATE SET
+                        gs.gameId = $gameId,
+                        gs.status = 'checkpoint',
+                        gs.category = $category,
+                        gs.summary = $content,
+                        gs.turnNumber = $turnNumber,
+                        gs.createdAt = $now
+                    ON MATCH SET
+                        gs.summary = $content
                     FOREACH (_ IN CASE WHEN tail IS NULL THEN [1] ELSE [] END |
                         CREATE (g)-[:HAS_CHECKPOINT]->(gs)
                     )
