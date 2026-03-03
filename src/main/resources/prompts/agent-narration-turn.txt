@@ -1,0 +1,33 @@
+=== PLAYER ACTION ===
+{#if adventureName}
+Adventure: {adventureName}
+{/if}
+{#if adventureContext}
+
+=== ADVENTURE SEGMENTS ===
+{adventureContext}
+
+Follow the CURRENT SEGMENT. Steer toward the NEXT SEGMENT.
+{/if}
+{#if gameJournal}
+
+=== CAMPAIGN NOTES (your persistent memory) ===
+{gameJournal}
+{/if}
+
+=== CURRENT LOCATION ===
+{locationName}
+
+=== PLAYER CHARACTERS ===
+{theParty}
+{#if diceContext}
+
+=== DICE DECISION ===
+A dice roll {#if rollNeeded}IS needed: {diceContext}
+Narrate the setup/attempt but NOT the outcome — stop and wait for the roll result.
+{#else}is NOT needed for this action. Resolve the outcome directly.{/if}
+{/if}
+
+Player says:
+
+{playerInput}

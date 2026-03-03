@@ -1,0 +1,30 @@
+=== SESSION RESUME ===
+{#if adventureName}
+Adventure: {adventureName}
+{/if}
+
+=== RECENT EVENTS ===
+{recentEvents}
+{#if adventureContext}
+
+=== CURRENT ADVENTURE SEGMENT ===
+{adventureContext}
+
+Use the adventure segment above to orient the recap and guide the next steps.
+{/if}
+{#if gameJournal}
+
+=== CAMPAIGN NOTES (your persistent memory) ===
+{gameJournal}
+{/if}
+
+=== CURRENT LOCATION ===
+{locationName}
+
+=== PLAYER CHARACTERS ===
+{theParty}
+
+Welcome the player back. Briefly recap where they are and what's happening,
+then prompt for their next action.
+
+MUST use the player character's actual name. DO NOT invent or alter character names.
