@@ -12,6 +12,7 @@ import org.mockito.Mockito;
 
 import dev.ebullient.soloplay.GameRepository;
 import dev.ebullient.soloplay.play.GameEffect.HtmlFragment;
+import dev.ebullient.soloplay.play.agents.AgentOrchestrator;
 import dev.ebullient.soloplay.play.model.GameState;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
@@ -26,7 +27,7 @@ class GamePlayEngineChoicesTest {
     GameRepository gameRepository;
 
     @InjectMock
-    GamePlayAssistant assistant;
+    AgentOrchestrator orchestrator;
 
     @Test
     void choicesCreateHtmlFragmentEffect() {
@@ -39,7 +40,7 @@ class GamePlayEngineChoicesTest {
         Mockito.when(gameRepository.findTheParty(gameId)).thenReturn(List.of());
         Mockito.when(gameRepository.getCheckpoints(gameId)).thenReturn(List.of());
 
-        Mockito.when(assistant.turn(
+        Mockito.when(orchestrator.turn(
                 Mockito.eq(gameId),
                 Mockito.any(),
                 Mockito.anyList(),

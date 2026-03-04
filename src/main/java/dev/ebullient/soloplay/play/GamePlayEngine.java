@@ -10,6 +10,7 @@ import jakarta.inject.Inject;
 
 import dev.ebullient.soloplay.GameRepository;
 import dev.ebullient.soloplay.play.GameEffect.HtmlFragment;
+import dev.ebullient.soloplay.play.agents.AgentOrchestrator;
 import dev.ebullient.soloplay.play.model.Actor;
 import dev.ebullient.soloplay.play.model.BaseEntity;
 import dev.ebullient.soloplay.play.model.Event;
@@ -28,7 +29,7 @@ public class GamePlayEngine {
     GameRepository gameRepository;
 
     @Inject
-    GamePlayAssistant assistant;
+    AgentOrchestrator orchestrator;
 
     @Inject
     RollHandler rollHandler;
@@ -56,7 +57,7 @@ public class GamePlayEngine {
                 Log.infof("sceneStart: no adventure set (sandbox mode)");
             }
 
-            var response = assistant.sceneStart(
+            var response = orchestrator.sceneStart(
                     game.getGameId(),
                     game.getAdventureName(),
                     listTheParty(game),
@@ -75,7 +76,7 @@ public class GamePlayEngine {
         try {
             String adventureContext = fetchAdventureContext(game);
 
-            var response = assistant.recap(
+            var response = orchestrator.recap(
                     game.getGameId(),
                     game.getAdventureName(),
                     listTheParty(game),
@@ -117,7 +118,7 @@ public class GamePlayEngine {
         Log.debugf("handleTurn: adventureContext=%s",
                 adventureContext != null ? "present (" + adventureContext.length() + " chars)" : "null");
 
-        var response = assistant.turn(
+        var response = orchestrator.turn(
                 game.getGameId(),
                 game.getAdventureName(),
                 listTheParty(game),
@@ -145,7 +146,7 @@ public class GamePlayEngine {
 
         String adventureContext = fetchAdventureContext(game);
 
-        var response = assistant.resolveRoll(
+        var response = orchestrator.resolveRoll(
                 game.getGameId(),
                 game.getAdventureName(),
                 listTheParty(game),
