@@ -1,9 +1,12 @@
 package dev.ebullient.soloplay.play.agents;
 
+import jakarta.enterprise.context.ApplicationScoped;
+
 import dev.langchain4j.service.SystemMessage;
 import dev.langchain4j.service.UserMessage;
 import io.quarkiverse.langchain4j.RegisterAiService;
 
+@ApplicationScoped
 @SystemMessage(fromResource = "prompts/agent-checkpoint-system.txt")
 @RegisterAiService(chatMemoryProviderSupplier = RegisterAiService.NoChatMemoryProviderSupplier.class)
 public interface CheckpointAgent {

@@ -2,11 +2,14 @@ package dev.ebullient.soloplay.play.agents;
 
 import java.util.List;
 
+import jakarta.enterprise.context.ApplicationScoped;
+
 import dev.langchain4j.service.SystemMessage;
 import dev.langchain4j.service.UserMessage;
 import dev.langchain4j.service.guardrail.OutputGuardrails;
 import io.quarkiverse.langchain4j.RegisterAiService;
 
+@ApplicationScoped
 @SystemMessage(fromResource = "prompts/agent-dice-system.txt")
 @RegisterAiService(chatMemoryProviderSupplier = RegisterAiService.NoChatMemoryProviderSupplier.class)
 @OutputGuardrails(DiceDecisionGuardrail.class)

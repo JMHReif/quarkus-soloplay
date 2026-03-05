@@ -2,10 +2,13 @@ package dev.ebullient.soloplay.play.agents;
 
 import java.util.List;
 
+import jakarta.enterprise.context.ApplicationScoped;
+
 import dev.langchain4j.service.SystemMessage;
 import dev.langchain4j.service.UserMessage;
 import io.quarkiverse.langchain4j.RegisterAiService;
 
+@ApplicationScoped
 @SystemMessage(fromResource = "prompts/agent-recap-system.txt")
 @RegisterAiService(chatMemoryProviderSupplier = RegisterAiService.NoChatMemoryProviderSupplier.class)
 public interface RecapAgent {
