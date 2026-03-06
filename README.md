@@ -149,6 +149,10 @@ the JSON and HTML-fragment responses consumed by these scripts.
 
 ---
 
+## Presentations
+
+* [Devnexus 2026 (Erin Schnabel and Jennifer Reif)](https://speakerdeck.com/jmhreif/supercharge-your-applications-with-java-graphs-and-a-touch-of-ai)
+
 ## Contributing
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for architecture details, API reference,
