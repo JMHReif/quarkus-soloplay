@@ -48,14 +48,24 @@ with YAML frontmatter → chunk → embed with nomic-embed-text → store in Neo
 
 ### Level 4 — Full Gameplay (`/play/{gameId}`)
 
-Full orchestration: a system prompt plus four context-specific user-message prompt resources,
-session memory, LoreTools + GameTools, and a WebSocket transport for interactive play.
-The model calls tools to query both lore and live game state each turn.
+Full orchestration via an `AgentOrchestrator` that coordinates five specialized agents per turn.
+Only the narration agent maintains session memory and has tool access; the other four are stateless
+and run concurrently via `CompletableFuture`. A WebSocket transport streams results for interactive play.
+
+The five agents:
+
+| Agent | Purpose | Stateful? |
+| ----- | ------- | --------- |
+| [`NarrationAgent`](src/main/java/dev/ebullient/soloplay/play/agents/NarrationAgent.java) | Storytelling — produces the scene narration | Yes (session memory + tools) |
+| [`DiceAgent`](src/main/java/dev/ebullient/soloplay/play/agents/DiceAgent.java) | Decides if/what dice roll is required | No |
+| [`SuggestionAgent`](src/main/java/dev/ebullient/soloplay/play/agents/SuggestionAgent.java) | Generates 2–3 concrete next-action choices | No |
+| [`CheckpointAgent`](src/main/java/dev/ebullient/soloplay/play/agents/CheckpointAgent.java) | Identifies milestone moments and segment completion | No |
+| [`RecapAgent`](src/main/java/dev/ebullient/soloplay/play/agents/RecapAgent.java) | Produces a 1–2 sentence turn summary | No |
 
 **Key source:**
 
-- [`GamePlayAssistant`](src/main/java/dev/ebullient/soloplay/play/GamePlayAssistant.java) — AI service with tools, memory, and structured output
-- [`GamePlayEngine`](src/main/java/dev/ebullient/soloplay/play/GamePlayEngine.java) — routes turns through scene start, recap, action, and roll resolution prompts
+- [`AgentOrchestrator`](src/main/java/dev/ebullient/soloplay/play/agents/AgentOrchestrator.java) — coordinates agents, assembles the composite `GamePlayResponse`
+- [`GamePlayEngine`](src/main/java/dev/ebullient/soloplay/play/GamePlayEngine.java) — routes turns through scene start, recap, action, and roll resolution
 - [`GameTools`](src/main/java/dev/ebullient/soloplay/play/GameTools.java) — AI tools: story recap, actor lookup, location lookup
 - [`PlayWebSocket`](src/main/java/dev/ebullient/soloplay/play/PlayWebSocket.java) — WebSocket at `/ws/play/{gameId}` for interactive play
 

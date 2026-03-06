@@ -106,7 +106,7 @@ The application uses LangChain4j's declarative AI service interfaces:
 - **ChatAssistant**: Simple chat interface - methods are auto-implemented by LangChain4j
 - **LoreAssistant**: RAG-enabled queries - automatically retrieves relevant embeddings
 - **ActorCreationAssistant**: Character creation assistant (RAG-enabled, structured JSON output)
-- **GamePlayAssistant**: GM assistant for play turns (RAG + tools, structured JSON output)
+- **Gameplay agents** (in `play/agents/`): Five specialized `@RegisterAiService` interfaces coordinated by `AgentOrchestrator` — see [Gameplay Architecture](#gameplay-architecture-games--play) below
 
 These are plain Java interfaces annotated with `@RegisterAiService`. Quarkus LangChain4j generates the implementation at build time.
 
@@ -120,8 +120,16 @@ Core components:
 
 - **GameEngine**: Routes user input to the appropriate engine based on phase and commands (e.g. `/help`, `/status`, `/newcharacter`, `/roll`, `/start`)
 - **ActorCreationEngine**: Runs a guided character creation flow backed by `ActorCreationAssistant` and a draft stored on the `GameState`
-- **GamePlayEngine**: Runs turn processing backed by `GamePlayAssistant` and applies returned patches to update world state
+- **GamePlayEngine**: Runs turn processing via `AgentOrchestrator` and applies the composite response to update world state
+- **AgentOrchestrator**: Coordinates five specialized agents per turn:
+  - **NarrationAgent** — storytelling (session-scoped with chat memory and LoreTools + GameTools)
+  - **DiceAgent** — decides if/what dice roll is required (stateless)
+  - **SuggestionAgent** — generates 2–3 concrete next-action choices (stateless)
+  - **CheckpointAgent** — identifies milestone moments and segment completion (stateless)
+  - **RecapAgent** — produces a 1–2 sentence turn summary (stateless)
 - **PlayWebSocket**: Streams responses to the browser over WebSockets Next (`/ws/play/{gameId}`)
+
+Stateless agents run concurrently via `CompletableFuture` with graceful fallback defaults on failure.
 
 Game state is persisted in Neo4j via **neo4j-ogm-quarkus** using nodes like `Game`, `Actor`, `PlayerActor`, `Location`, and `Event`.
 
@@ -185,6 +193,19 @@ User Request → REST/WebSocket → Engine/Resource → AI Service Interface →
                                                     Response → Markdown → HTML
 ```
 
+**Gameplay turn flow (Level 4):**
+```
+Player Input → GamePlayEngine → AgentOrchestrator
+                                  ├── DiceAgent (sync, runs first)
+                                  ├── NarrationAgent (sync, informed by dice decision)
+                                  └── concurrent:
+                                      ├── SuggestionAgent
+                                      ├── CheckpointAgent
+                                      └── RecapAgent
+                                  ↓
+                        GamePlayResponse (assembled from all agents)
+```
+
 ## Code Standards
 
 - **Java 21**: Use modern Java features (records, pattern matching, etc.)
@@ -243,7 +264,8 @@ src/main/java/dev/ebullient/soloplay/
 ├── api/                 # REST endpoints: ChatResource, LoreResource, GameResource
 ├── health/              # Health checks (Neo4j, Ollama)
 ├── ollama/              # Optional REST client for Ollama API
-├── play/                # Game engines, assistants, tools, WebSocket transport
+├── play/                # Game engines, tools, WebSocket transport
+│   ├── agents/          # Specialized AI agents + orchestrator for gameplay
 │   └── model/           # Neo4j OGM entities, patches, and draft models
 ├── web/                 # Renarde MVC controllers (page routing, forms)
 ├── GameRepository.java  # Game state persistence (Neo4j OGM)
@@ -308,8 +330,8 @@ The application provides both REST APIs and web UI (Renarde MVC) for interacting
 - **Implementation:**
   - Uses GameEngine for phase routing and persistence
   - Uses ActorCreationAssistant + ActorCreationEngine during character creation
-  - Uses GamePlayAssistant + GamePlayEngine during active play
-  - AI can invoke LoreTools and GameTools for context and continuity
+  - Uses AgentOrchestrator + GamePlayEngine during active play (5 specialized agents per turn)
+  - AI can invoke LoreTools and GameTools for context and continuity (via NarrationAgent)
   - GameRepository provides Neo4j persistence for game state entities
 
 ### Architecture Notes
@@ -321,7 +343,7 @@ The application provides both REST APIs and web UI (Renarde MVC) for interacting
 
 **AI Tool Access:**
 - LLM can autonomously invoke `@Tool` methods (LoreTools + GameTools)
-- Tools are available to ActorCreationAssistant and GamePlayAssistant
+- Tools are available to ActorCreationAssistant and NarrationAgent (the only gameplay agent with tool access)
 
 ## Data Flows
 
